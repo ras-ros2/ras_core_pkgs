@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-
+import json
 path_for_config = os.path.join(os.environ["OSS_WORKSPACE_PATH"], "src", "oss_aws_transport", "aws_configs", "aws_config.json")
 with open(path_for_config) as f:
     cert_data = json.load(f)
@@ -10,7 +10,6 @@ os.environ["AWS_ACCESS_KEY_ID"] = cert_data["AWS_ACCESS_KEY_ID"]
 os.environ["AWS_SECRET_ACCESS_KEY"] = cert_data["AWS_SECRET_ACCESS_KEY"]
 
 import rclpy
-import json
 from rclpy.node import Node
 import boto3
 from oss_interfaces.srv import SetPath

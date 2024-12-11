@@ -7,25 +7,25 @@ from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from rclpy.action import ActionClient
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from oss_interfaces.srv import JointSat, LoadExp
+from ras_interfaces.srv import JointSat, LoadExp
 from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
-from oss_interfaces.srv import SetPath
+from ras_interfaces.srv import SetPath
 
 import json
 import yaml
 import time
-from oss_interfaces.action import BTInterface
+from ras_interfaces.action import BTInterface
 
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
         super().__init__('trajectory_logger')
 
-        self.ws_path = os.environ["OSS_WORKSPACE_PATH"]
+        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
 
-        self.path_for_config = os.path.join(self.ws_path, "src", "oss_aws_transport", "aws_configs", "iot_receiver_config.json")
+        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_receiver_config.json")
 
         with open(self.path_for_config) as f:
           cert_data = json.load(f)
@@ -73,7 +73,7 @@ class TrajectoryLogger(LifecycleNode):
         self.payload =  message.payload.decode("utf-8")
         self.get_logger().info("Received Message")
 
-        extract_path = os.path.join(self.ws_path, "src", "oss_aws_transport", "real_bot_zip")
+        extract_path = os.path.join(self.ws_path, "src", "ras_aws_transport", "real_bot_zip")
 
         print("Downloading the file using wget...")
         result = subprocess.run(
@@ -84,7 +84,7 @@ class TrajectoryLogger(LifecycleNode):
     )
         print("Download completed:")
 
-        extract_path = os.path.join(self.ws_path, "src", "oss_aws_transport", "real_bot_zip")
+        extract_path = os.path.join(self.ws_path, "src", "ras_aws_transport", "real_bot_zip")
 
         result2 = subprocess.run(
         ["unzip", "-o", f"{extract_path}/traj.zip", "-d", f"{extract_path}"],

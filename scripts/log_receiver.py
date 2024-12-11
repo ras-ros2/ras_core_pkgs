@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from oss_interfaces.srv import JointSat, LoadExp
+from ras_interfaces.srv import JointSat, LoadExp
 from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
@@ -21,9 +21,9 @@ class TrajectoryLogger(LifecycleNode):
 
         my_callback_group = ReentrantCallbackGroup()
 
-        self.ws_path = os.environ["OSS_WORKSPACE_PATH"]
+        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
 
-        self.path_for_config = os.path.join(self.ws_path, "src", "oss_aws_transport", "aws_configs", "log_receiver_config.json")
+        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "log_receiver_config.json")
 
         with open(self.path_for_config) as f:
           cert_data = json.load(f)

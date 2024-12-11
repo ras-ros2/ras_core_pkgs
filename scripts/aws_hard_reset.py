@@ -6,7 +6,7 @@ import json
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from oss_interfaces.srv import StatusLog
+from ras_interfaces.srv import StatusLog
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from std_srvs.srv import Empty
 

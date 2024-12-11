@@ -5,7 +5,7 @@ from builtin_interfaces.msg import Duration
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 import json
 import time
-from oss_interfaces.msg import Instruction
+from ras_interfaces.msg import Instruction
 from std_msgs.msg import Bool
 
 

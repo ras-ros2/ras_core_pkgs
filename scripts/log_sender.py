@@ -9,15 +9,15 @@ import rclpy
 from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from sensor_msgs.msg import JointState
-from oss_interfaces.srv import StatusLog
+from ras_interfaces.srv import StatusLog
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
 
 # AWS IoT Parameters
 host = "a1u5bxro5znv23-ats.iot.ap-south-1.amazonaws.com"
-root_ca_path = "/oss_real_lab/ros2_ws/src/oss_aws_transport/aws_cert/AmazonRootCA1.pem"
-certificate_path = "/oss_real_lab/ros2_ws/src/oss_aws_transport/aws_cert/4f163fd4aedc5fb7dac84fb40685a69859a5eec8b47351d0cbc7e393e1101588-certificate.pem.crt"
-private_key_path = "/oss_real_lab/ros2_ws/src/oss_aws_transport/aws_cert/4f163fd4aedc5fb7dac84fb40685a69859a5eec8b47351d0cbc7e393e1101588-private.pem.key"
+root_ca_path = "/ras_real_lab/ros2_ws/src/ras_aws_transport/aws_cert/AmazonRootCA1.pem"
+certificate_path = "/ras_real_lab/ros2_ws/src/ras_aws_transport/aws_cert/4f163fd4aedc5fb7dac84fb40685a69859a5eec8b47351d0cbc7e393e1101588-certificate.pem.crt"
+private_key_path = "/ras_real_lab/ros2_ws/src/ras_aws_transport/aws_cert/4f163fd4aedc5fb7dac84fb40685a69859a5eec8b47351d0cbc7e393e1101588-private.pem.key"
 port = 8883
 topic = "logging/topic"
 client_id = "log_sender_client"
@@ -28,9 +28,9 @@ class ArmLogger(LifecycleNode):
 
         self.get_logger().info('NODE STARTED')
 
-        self.ws_path = os.environ["OSS_WORKSPACE_PATH"]
+        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
 
-        self.path_for_config = os.path.join(self.ws_path, "src", "oss_aws_transport", "aws_configs", "log_sender_config.json")
+        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "log_sender_config.json")
 
         with open(self.path_for_config) as f:
           cert_data = json.load(f)

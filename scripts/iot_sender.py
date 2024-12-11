@@ -5,19 +5,19 @@ from rclpy.node import Node
 from trajectory_msgs.msg import JointTrajectory
 import json
 import time
-from oss_interfaces.action import ExecuteExp
+from ras_interfaces.action import ExecuteExp
 from std_srvs.srv import SetBool
 from rclpy.action import ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import Bool
-from oss_interfaces.msg import Instruction
+from ras_interfaces.msg import Instruction
 import ast
 from trajectory_msgs.msg import JointTrajectory
 from awscrt import mqtt 
 import json
 from connection_helper import ConnectionHelper
-from oss_interfaces.srv import SetPath
-from oss_interfaces.action import ExecuteExp
+from ras_interfaces.srv import SetPath
+from ras_interfaces.action import ExecuteExp
 
 import os
 import zipfile
@@ -36,8 +36,8 @@ class LinkHandler(Node):
         self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
-        self.ws_path = os.environ["OSS_WORKSPACE_PATH"]
-        self.path_for_config = os.path.join(self.ws_path, "src", "oss_aws_transport", "aws_configs", "iot_sender_config.json")
+        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
+        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
         discover_endpoints = False
         self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
         
@@ -45,7 +45,7 @@ class LinkHandler(Node):
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
         zip_file_path = self.zip_xml_directory()
-        path = os.path.join(self.ws_path, "src", "oss_bt_framework", "xml", "xml_directory.zip")
+        path = os.path.join(self.ws_path, "src", "ras_bt_framework", "xml", "xml_directory.zip")
         self.send_zip_file_path(path)
         result = ExecuteExp.Result()
         result.success = True
@@ -69,10 +69,10 @@ class LinkHandler(Node):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Define the path to the xml directory
-        xml_dir_path = "/oss_sim_lab/ros2_ws/src/oss_bt_framework/xml/"
+        xml_dir_path = "/ras_sim_lab/ros2_ws/src/ras_bt_framework/xml/"
         
         # Define the path for the output zip file
-        zip_file_path = "/oss_sim_lab/ros2_ws/src/oss_bt_framework/xml/xml_directory.zip"
+        zip_file_path = "/ras_sim_lab/ros2_ws/src/ras_bt_framework/xml/xml_directory.zip"
         
         # Create a zip file and add all files in the xml directory to it
         with zipfile.ZipFile(zip_file_path, 'w') as zipf:

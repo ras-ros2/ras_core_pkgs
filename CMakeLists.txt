@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(oss_moveit)
+project(ras_moveit)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -13,7 +13,7 @@ find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(control_msgs REQUIRED)
-find_package(oss_interfaces REQUIRED)
+find_package(ras_interfaces REQUIRED)
 find_package(std_srvs REQUIRED)
 
 install(
@@ -32,7 +32,7 @@ ament_target_dependencies(moveit_server
   rclcpp
   moveit_ros_planning_interface
   trajectory_msgs
-  oss_interfaces
+  ras_interfaces
   std_srvs
   control_msgs)
 
@@ -42,7 +42,7 @@ ament_target_dependencies(moveit_real_server
   rclcpp
   moveit_ros_planning_interface
   trajectory_msgs
-  oss_interfaces
+  ras_interfaces
   std_srvs
   control_msgs)
   

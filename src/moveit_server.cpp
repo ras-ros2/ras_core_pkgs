@@ -18,11 +18,11 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
         RCLCPP_INFO(LOGGER, "Node Started");
 
-        move_to_pose_srv_ = this->create_service<oss_interfaces::srv::PoseReq>(
+        move_to_pose_srv_ = this->create_service<ras_interfaces::srv::PoseReq>(
         "/create_traj",
         std::bind(&MoveitServer::move_to_pose_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-        rotate_effector_srv_ = this->create_service<oss_interfaces::srv::RotateEffector>(
+        rotate_effector_srv_ = this->create_service<ras_interfaces::srv::RotateEffector>(
         "/rotate_effector",
         std::bind(&MoveitServer::rotate_effector_callback, this, std::placeholders::_1, std::placeholders::_2));
 
@@ -31,7 +31,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
         trajectory_pub = this->create_publisher<trajectory_msgs::msg::JointTrajectory>("trajectory_topic", 10);
         
-        sync_srv = this->create_service<oss_interfaces::srv::JointSat>(
+        sync_srv = this->create_service<ras_interfaces::srv::JointSat>(
         "/sync_arm",
         std::bind(&MoveitServer::sync_callback, this, std::placeholders::_1, std::placeholders::_2)
         );
@@ -154,8 +154,8 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
   }
 
   void MoveitServer::move_to_pose_callback(
-      const std::shared_ptr<oss_interfaces::srv::PoseReq::Request> request,
-      std::shared_ptr<oss_interfaces::srv::PoseReq::Response> response) 
+      const std::shared_ptr<ras_interfaces::srv::PoseReq::Request> request,
+      std::shared_ptr<ras_interfaces::srv::PoseReq::Response> response) 
   {
     RCLCPP_WARN(this->get_logger(), "Received Pose request...");
 
@@ -176,8 +176,8 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
   }
 
   void MoveitServer::rotate_effector_callback(
-    const std::shared_ptr<oss_interfaces::srv::RotateEffector::Request> request,
-    std::shared_ptr<oss_interfaces::srv::RotateEffector::Response> response)
+    const std::shared_ptr<ras_interfaces::srv::RotateEffector::Request> request,
+    std::shared_ptr<ras_interfaces::srv::RotateEffector::Response> response)
   {
     trajectory_msgs::msg::JointTrajectory trajectory_msg;
     RCLCPP_INFO(LOGGER, "Received RotateEffector request to rotate end effector by angle: %f", request->rotation_angle);
@@ -233,8 +233,8 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
       }
   }
 
-  void MoveitServer::sync_callback(const std::shared_ptr<oss_interfaces::srv::JointSat::Request> request,
-      std::shared_ptr<oss_interfaces::srv::JointSat::Response> response)
+  void MoveitServer::sync_callback(const std::shared_ptr<ras_interfaces::srv::JointSat::Request> request,
+      std::shared_ptr<ras_interfaces::srv::JointSat::Response> response)
   {
     std::vector<double> joint_values;
     for (const auto& x : request->joint_state.position)

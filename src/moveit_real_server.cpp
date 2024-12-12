@@ -17,14 +17,14 @@ MoveitRealServer::MoveitRealServer(std::shared_ptr<rclcpp::Node> move_group_node
         );
         RCLCPP_INFO(LOGGER, "Real Node Started");
 
-        execute_traj_srv = this->create_service<oss_interfaces::srv::ActionTraj>(
+        execute_traj_srv = this->create_service<ras_interfaces::srv::ActionTraj>(
             "trajectory_topic",
             std::bind(&MoveitRealServer::trajectory_callback, this, std::placeholders::_1, std::placeholders::_2));
 
         }
   
-void MoveitRealServer::trajectory_callback(const std::shared_ptr<oss_interfaces::srv::ActionTraj::Request> request,
-      std::shared_ptr<oss_interfaces::srv::ActionTraj::Response> response)
+void MoveitRealServer::trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
+      std::shared_ptr<ras_interfaces::srv::ActionTraj::Response> response)
     {
     RCLCPP_INFO(this->get_logger(), "Received trajectory message");
 

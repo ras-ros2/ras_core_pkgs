@@ -51,7 +51,7 @@ def _create_file(file_name, base_directory, exist_ok=True):
 def _create_template_file(
     submodule_package, template_name, output_directory, output_file_name, template_config
 ):
-    with importlib_resources.path(f"oss_resource_lib.{submodule_package}", template_name+".em") as path:
+    with importlib_resources.path(f"ras_resource_lib.{submodule_package}", template_name+".em") as path:
         template_path = Path(path)
     output_directory = Path(output_directory)
     

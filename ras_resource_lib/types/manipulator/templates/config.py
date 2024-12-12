@@ -1,6 +1,6 @@
 
 def template_func(asset_name):
-    from oss_resource_lib.types.manipulator.config import ManipulatorCfg
+    from ras_resource_lib.types.manipulator.config import ManipulatorCfg
     from trajectory_msgs.msg import JointTrajectory
     class MyManipulatorCfg(ManipulatorCfg):
         def __init__(self):

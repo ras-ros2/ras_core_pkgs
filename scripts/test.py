@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-from oss_resource_lib.managers.asset_manager import AssetManager,AssetType
+from ras_resource_lib.managers.asset_manager import AssetManager,AssetType
 
 def main():
     AssetManager.init()
-    component =AssetManager.get_asset_component("oss_lab1",AssetType.LAB)
+    component =AssetManager.get_asset_component("ras_lab1",AssetType.LAB)
     print(component)
 
 if __name__=="__main__":

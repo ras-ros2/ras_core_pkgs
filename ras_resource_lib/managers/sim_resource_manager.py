@@ -20,7 +20,7 @@ class SimResourceManager(object):
             return
         cls._initialized = True
         cls._resource_providers : Dict[SimResourceType,Dict[str,set]] = dict()
-        install_path = Path(os.environ['OSS_WORKSPACE_PATH'])/'install'
+        install_path = Path(os.environ['RAS_WORKSPACE_PATH'])/'install'
         assert install_path.is_dir()
         for type_name,resource_type in SimResourceType._member_map_.items():
             if type_name == "NONE":

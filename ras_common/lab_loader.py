@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 from geometry_msgs.msg import Pose
 import tf_transformations
-CONFIGS_PATH = Path(os.environ["OSS_WORKSPACE_PATH"])/"src/oss_configs"
+CONFIGS_PATH = Path(os.environ["RAS_APP_PATH"])/"configs"
 CONFIG_FILE = CONFIGS_PATH/"lab_setup.yaml"
 
 class LabLoader(object):

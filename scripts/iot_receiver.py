@@ -32,10 +32,9 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from ras_interfaces.srv import JointSat, LoadExp
 from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
-from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import SetPath
-
+from ras_common.transport.TransportServer import TransportMQTTSubscriber
 import json
 import yaml
 import time
@@ -44,14 +43,6 @@ from ras_interfaces.action import BTInterface
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
         super().__init__('trajectory_logger')
-
-        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
-
-        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_receiver_config.json")
-
-        with open(self.path_for_config) as f:
-          cert_data = json.load(f)
-
         my_callback_group = ReentrantCallbackGroup()
 
         self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
@@ -60,38 +51,29 @@ class TrajectoryLogger(LifecycleNode):
         self.path_client = self.create_client(SetPath, '/load_path')
         self._action_client = ActionClient(self,BTInterface,"bt_executor")
 
-        # Initialize the MQTT client
-        self.mqtt_client = AWSIoTMQTTClient(cert_data["clientID"])
-        self.mqtt_client.configureEndpoint(cert_data["endpoint"], cert_data["port"])
-        self.mqtt_client.configureCredentials(cert_data["rootCAPath"], cert_data["privateKeyPath"], cert_data["certificatePath"])
-        self.mqtt_client.configureOfflinePublishQueueing(-1)  # Infinite offline publish queueing
-        self.mqtt_client.configureDrainingFrequency(2)  # Draining: 2 Hz
-        self.mqtt_client.configureConnectDisconnectTimeout(10.0)  # 10 sec
-        self.mqtt_client.configureMQTTOperationTimeout(10.0)  # 10 sec
-        self.mqtt_client.configureLastWill("last/will/topic", "Client disconnected unexpectedly", 1)
         self.instruction_msg = []
 
         self.instruction_flag = True
-
+        self.mqtt_sub = TransportMQTTSubscriber("test/topic", self.custom_callback)
         # Connect to AWS IoT
         self.connect_to_aws()
 
         # Subscribe to the topic
-        self.mqtt_client.subscribe(cert_data["topic"], 1, self.custom_callback)
-        self.get_logger().info(f"Subscribed to topic: {cert_data['topic']}")
+        # self.mqtt_client.subscribe(cert_data["topic"], 1, self.custom_callback)
+        # self.get_logger().info(f"Subscribed to topic: {cert_data['topic']}")
         self.payload = ''
     def connect_to_aws(self):
         """Attempt to connect to AWS IoT with retries"""
         while True:
             try:
-                self.mqtt_client.connect()
+                self.mqtt_sub.mqttsubscriber.connect()
                 self.get_logger().info("Connected to AWS IoT")
                 break
             except Exception as e:
                 self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
                 time.sleep(5)
 
-    def custom_callback(self, client, userdata, message):
+    def custom_callback(self, message):
         self.payload =  message.payload.decode("utf-8")
         self.get_logger().info("Received Message")
 
@@ -99,7 +81,7 @@ class TrajectoryLogger(LifecycleNode):
 
         print("Downloading the file using wget...")
         result = subprocess.run(
-        ["wget", self.payload, "-P", f"{extract_path}"],
+        ["cp", f"{os.environ["RAS_APP_PATH"]}/serve/traj.zip", f"{extract_path}"],
         check=True,
         capture_output=True,
         text=True,

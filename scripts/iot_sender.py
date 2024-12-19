@@ -34,12 +34,12 @@ from std_msgs.msg import Bool
 from ras_interfaces.msg import Instruction
 import ast
 from trajectory_msgs.msg import JointTrajectory
-from awscrt import mqtt 
+# from awscrt import mqtt 
 import json
-from connection_helper import ConnectionHelper
+# from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-
+from ras_common.transport.TransportServer import TransportMQTTPublisher
 import os
 import zipfile
 
@@ -57,10 +57,12 @@ class LinkHandler(Node):
         self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
-        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
-        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
+        # self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
+        # self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
         discover_endpoints = False
-        self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
+        # self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
+        self.mqtt_pub = TransportMQTTPublisher("test/topic")
+        self.mqtt_pub.mqttpublisher.connect()
         
 
     def send_callback(self, goal_handle):
@@ -107,11 +109,12 @@ class LinkHandler(Node):
 
     def publish_with_retry(self, payload, delay=2):
         self.get_logger().info("Publishing to AWS IoT")
-        self.connection_helper.mqtt_conn.publish(
-            topic="test/topic",
-            payload=payload,
-            qos=mqtt.QoS.AT_LEAST_ONCE
-        )
+        self.mqtt_pub.mqttpublisher.publish(payload.encode("utf-8"))
+        # self.connection_helper.mqtt_conn.publish(
+        #     topic="test/topic",
+        #     payload=payload,
+        #     qos=mqtt.QoS.AT_LEAST_ONCE
+        # )
 
         time.sleep(0.25)
 

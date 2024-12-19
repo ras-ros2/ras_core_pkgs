@@ -13,6 +13,9 @@ find_package(ament_cmake_python REQUIRED)
 # find_package(<dependency> REQUIRED)
 
 
+install(DIRECTORY scripts/
+ DESTINATION lib/${PROJECT_NAME}/)
+ 
 ament_python_install_package(${PROJECT_NAME})
 
 if(BUILD_TESTING)

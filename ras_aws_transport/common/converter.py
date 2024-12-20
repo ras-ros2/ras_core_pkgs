@@ -29,7 +29,7 @@ from rosidl_runtime_py.convert import message_to_ordereddict
 from rosidl_runtime_py.set_message import set_message_fields
 
 def convert_msg_to_json(msg):
-    msg_dict : OrderedDict = message_to_ordereddict(msg) 
+    msg_dict : OrderedDict = message_to_ordereddict(msg)
     return json.dumps(msg_dict)
 
 def convert_json_to_msg(json_obj:dict|str, msg_type: type):

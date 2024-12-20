@@ -51,7 +51,7 @@ class BucketUpload(Node):
         file_path = req.path
         self.get_logger().info(f"{self.object_name} Sucessfully Uploaded")
         self.ftp_client.ftpclient.upload(file_path, self.object_name)
-        resp.link = ""
+        resp.link = self.object_name
         return resp
     
 def main():

@@ -57,13 +57,23 @@ class LinkHandler(Node):
         self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
-        # self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
+        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
         # self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
         discover_endpoints = False
         # self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
         self.mqtt_pub = TransportMQTTPublisher("test/topic")
-        self.mqtt_pub.mqttpublisher.connect()
+        self.connect_to_aws()
         
+    def connect_to_aws(self):
+        """Attempt to connect to AWS IoT with retries"""
+        while True:
+            try:
+                self.mqtt_pub.mqttpublisher.connect()
+                self.get_logger().info("Connected to AWS IoT")
+                break
+            except Exception as e:
+                self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
 
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
@@ -124,6 +134,8 @@ def main(args=None):
     try:
         while rclpy.ok():
             rclpy.spin_once(node)
+            node.mqtt_pub.mqttpublisher.client.loop()
+
     except KeyboardInterrupt:
         pass
     finally:

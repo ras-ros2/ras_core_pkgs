@@ -57,6 +57,7 @@ class MqttSubscriber(SubscriberInterface):
         self.client = paho.mqtt.client.Client(
             CallbackAPIVersion.VERSION2,
             client_id="",
+            userdata={},
             protocol=paho.mqtt.client.MQTTv311,
             transport="tcp",
             reconnect_on_failure=True,

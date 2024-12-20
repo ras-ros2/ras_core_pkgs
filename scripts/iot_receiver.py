@@ -35,6 +35,7 @@ from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import SetPath
 from ras_common.transport.TransportServer import TransportMQTTSubscriber
+from rclpy.executors import MultiThreadedExecutor
 import json
 import yaml
 import time
@@ -45,9 +46,9 @@ class TrajectoryLogger(LifecycleNode):
         super().__init__('trajectory_logger')
         my_callback_group = ReentrantCallbackGroup()
 
-        self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
-        self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
-        self.fallback_client = self.create_client(LoadExp, "/fallback_info", callback_group=my_callback_group)
+        # self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
+        # self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
+        # self.fallback_client = self.create_client(LoadExp, "/fallback_info", callback_group=my_callback_group)
         self.path_client = self.create_client(SetPath, '/load_path')
         self._action_client = ActionClient(self,BTInterface,"bt_executor")
 
@@ -74,21 +75,30 @@ class TrajectoryLogger(LifecycleNode):
                 time.sleep(5)
 
     def custom_callback(self, message):
-        self.payload =  message.payload.decode("utf-8")
+        self.payload =  message.decode("utf-8")
         self.get_logger().info("Received Message")
 
-        extract_path = os.path.join(self.ws_path, "src", "ras_aws_transport", "real_bot_zip")
+        extract_path = os.path.join(os.environ['RAS_WORKSPACE_PATH'], "src", "ras_aws_transport", "real_bot_zip")
 
         print("Downloading the file using wget...")
         result = subprocess.run(
+<<<<<<< Updated upstream
         ["cp", f"{os.environ['RAS_APP_PATH']}/serve/traj.zip", f"{extract_path}"],
         check=True,
         capture_output=True,
         text=True,
     )
         print("Download completed:")
+=======
+            ["cp", f"{os.environ['RAS_APP_PATH']}/serve/traj.zip", f"{extract_path}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print("Download completed")
+>>>>>>> Stashed changes
 
-        extract_path = os.path.join(self.ws_path, "src", "ras_aws_transport", "real_bot_zip")
+        extract_path = os.path.join(os.environ['RAS_WORKSPACE_PATH'], "src", "ras_aws_transport", "real_bot_zip")
 
         result2 = subprocess.run(
         ["unzip", "-o", f"{extract_path}/traj.zip", "-d", f"{extract_path}"],
@@ -108,17 +118,20 @@ class TrajectoryLogger(LifecycleNode):
 def main(args=None):
     rclpy.init(args=args)
     receiver = TrajectoryLogger()
+    my_exec = MultiThreadedExecutor(num_threads=2)
+    my_exec.add_node(receiver)
     try:
         while rclpy.ok():
-            rclpy.spin_once(receiver)
+            my_exec.spin_once(timeout_sec=0.1)
+            receiver.mqtt_sub.mqttsubscriber.client.loop()
     except KeyboardInterrupt:
         pass
     finally:
         # Cleanup and disconnect
-        receiver.destroy_node()
-        receiver.mqtt_client.disconnect()
+        receiver.mqtt_sub.mqttsubscriber.disconnect()
         receiver.get_logger().info("Disconnected from AWS IoT")
-        rclpy.shutdown()
+        receiver.destroy_node()
+        # rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

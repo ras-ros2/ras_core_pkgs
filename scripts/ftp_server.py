@@ -6,8 +6,8 @@ def main(args=None):
     rclpy.init(args=args)
     ftp_server = TransportFTPServer("real")
     try:
-        while rclpy.ok():
-            rclpy.spin_once(ftp_server.ftpserver)
+        ftp_server.ftpserver.connect()
+        ftp_server.ftpserver.serve()
     except KeyboardInterrupt:
         pass
     finally:

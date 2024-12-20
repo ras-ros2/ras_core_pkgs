@@ -21,6 +21,7 @@ class MqttPublisher(PublisherInterface):
         self.client = paho.mqtt.client.Client(
             CallbackAPIVersion.VERSION2,
             client_id="",
+            userdata={},
             protocol=paho.mqtt.client.MQTTv311,
             transport="tcp",
             reconnect_on_failure=True,
@@ -98,7 +99,7 @@ class FtpServer(FileServerInterface):
 
     def connect(self) -> None:
         authorizer = DummyAuthorizer()
-        authorizer.add_user("user", "12345", str(self.path), perm="elradfmw")
+        authorizer.add_user("user", "password", str(self.path), perm="elradfmw")
         authorizer.add_anonymous(str(self.path))
 
         handler = FTPHandler
@@ -148,12 +149,14 @@ class FtpClient(FileClientInterface):
     def download(self, remote_path: Path, local_path: Path) -> None:
         if not self.is_connected():
             self.connect()
+        local_path = Path(local_path)
         with local_path.open("wb") as f:
             self.ftp.retrbinary("RETR " + str(remote_path), f.write)
         
     def upload(self, local_path: Path, remote_path: Path) -> None:
         if not self.is_connected():
             self.connect()
+        local_path = Path(local_path)
         with local_path.open("rb") as f:
             self.ftp.storbinary("STOR " + str(remote_path), f)
 

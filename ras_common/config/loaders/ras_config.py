@@ -29,6 +29,7 @@ class MQTTConfig(ConfigLoaderBase):
 
 @dataclass
 class TransportConfig(ConfigLoaderBase):
+    implementation: str
     ftp: FTPsConfig
     mqtt: MQTTConfig
 
@@ -44,6 +45,6 @@ class RasObject(object):
     def init(cls):
         if cls._initialized:
             return
-        yaml_obj = YamlFormat.load(YamlFormat.load(CONFIG_FILE)["ras"])
+        yaml_obj = YamlFormat.load(CONFIG_FILE)["ras"]
         cls.ras = RasConfig.from_dict(yaml_obj)
         cls._initialized = True

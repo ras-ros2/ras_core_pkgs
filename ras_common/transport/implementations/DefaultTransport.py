@@ -1,4 +1,4 @@
-from ..TrasnportInterfaces import PublisherInterface,SubscriberInterface,FileClientInterface,FileServerInterface
+from ..TrasnportInterfaces import PublisherInterface,SubscriberInterface,FileClientInterface,FileServerInterface,TransportImplementation
 from pathlib import Path
 from typing import Callable
 import paho
@@ -48,6 +48,9 @@ class MqttPublisher(PublisherInterface):
     def is_connected(self) -> bool:
         return self.client.is_connected()
     
+    def loop(self) -> None:
+        self.client.loop()
+    
 class MqttSubscriber(SubscriberInterface):
     def __init__(self, topic: str, ip: str, port: int, callback: Callable[[bytes], None]) -> None:
         self.topic = topic
@@ -89,6 +92,9 @@ class MqttSubscriber(SubscriberInterface):
     
     def is_connected(self) -> bool:
         return self.client.is_connected()
+    
+    def loop(self) -> None:
+        self.client.loop()
     
 class FtpServer(FileServerInterface):
     def __init__(self, path: Path, ip: str, port: int) -> None:
@@ -177,6 +183,7 @@ class HttpServer(FileServerInterface):
         self.app.config['SERVE_FOLDER'] = str(self.path.resolve().absolute())
 
     def connect(self) -> None:
+        @self.app.route('/')
         def home():
             files = [ str(_path) for _path in self.path.glob("*") ]
             return render_template_string('''
@@ -315,3 +322,19 @@ class HttpClient(FileClientInterface):
 
     def safe_kill(self) -> None:
         self.disconnect()
+
+
+def run_mosquitto_broker(port:int):
+    import subprocess
+    subprocess.run(f"mosquitto -p {port}", shell=True)
+
+default_transport = TransportImplementation(
+    name = "default",
+    publisher = MqttPublisher,
+    subscriber = MqttSubscriber,
+    file_server = FtpServer,
+    file_client = FtpClient,
+    # file_server = HttpServer,
+    # file_client = HttpClient,
+    brocker_func = run_mosquitto_broker
+)

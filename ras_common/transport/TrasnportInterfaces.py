@@ -1,6 +1,7 @@
 from abc import ABC,abstractmethod
 from pathlib import Path
 from typing import Callable
+from dataclasses import dataclass,field
 
 class PublisherInterface(ABC):
 
@@ -20,6 +21,10 @@ class PublisherInterface(ABC):
     def disconnect(self) -> None:
         pass
 
+    @abstractmethod
+    def loop(self) -> None:
+        pass
+
 class SubscriberInterface(ABC):
 
     @abstractmethod
@@ -36,6 +41,10 @@ class SubscriberInterface(ABC):
 
     @abstractmethod
     def disconnect(self) -> None:
+        pass
+
+    @abstractmethod
+    def loop(self) -> None:
         pass
 
 class FileServerInterface(ABC):
@@ -72,3 +81,17 @@ class FileClientInterface(ABC):
     @abstractmethod
     def download(self) -> bytes:
         pass
+
+    @abstractmethod
+    def disconnect(self) -> None:
+        pass
+
+
+@dataclass
+class TransportImplementation:
+    name: str
+    publisher:type[PublisherInterface]
+    subscriber:type[SubscriberInterface]
+    file_server:type[FileServerInterface]
+    file_client:type[FileClientInterface]
+    brocker_func:Callable[[int],None]

@@ -31,17 +31,9 @@ from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from sensor_msgs.msg import JointState
 from ras_interfaces.srv import StatusLog
-from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+# from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 
-
-# AWS IoT Parameters
-host = "a1u5bxro5znv23-ats.iot.ap-south-1.amazonaws.com"
-root_ca_path = "/ras_real_lab/ros2_ws/src/ras_aws_transport/aws_cert/AmazonRootCA1.pem"
-certificate_path = "/ras_real_lab/ros2_ws/src/ras_aws_transport/aws_cert/4f163fd4aedc5fb7dac84fb40685a69859a5eec8b47351d0cbc7e393e1101588-certificate.pem.crt"
-private_key_path = "/ras_real_lab/ros2_ws/src/ras_aws_transport/aws_cert/4f163fd4aedc5fb7dac84fb40685a69859a5eec8b47351d0cbc7e393e1101588-private.pem.key"
-port = 8883
-topic = "logging/topic"
-client_id = "log_sender_client"
 
 class ArmLogger(LifecycleNode):
     def __init__(self):
@@ -49,21 +41,7 @@ class ArmLogger(LifecycleNode):
 
         self.get_logger().info('NODE STARTED')
 
-        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
-
-        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "log_sender_config.json")
-
-        with open(self.path_for_config) as f:
-          cert_data = json.load(f)
-
-        self.mqtt_client = AWSIoTMQTTClient(cert_data["clientID"])
-        self.mqtt_client.configureEndpoint(cert_data["endpoint"], cert_data["port"])
-        self.mqtt_client.configureCredentials(cert_data["rootCAPath"], cert_data["privateKeyPath"], cert_data["certificatePath"])
-        self.mqtt_client.configureOfflinePublishQueueing(-1)  # Infinite offline publish queueing
-        self.mqtt_client.configureDrainingFrequency(2)  # Draining: 2 Hz
-        self.mqtt_client.configureConnectDisconnectTimeout(10.0)  # 10 sec
-        self.mqtt_client.configureMQTTOperationTimeout(10.0)  # 10 sec
-        self.mqtt_client.configureLastWill("last/will/topic", "Client disconnected unexpectedly", 1)
+        self.mqtt_pub = TransportMQTTPublisher("last/will/topic")
 
         joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_callback, 10)
         log_srv = self.create_service(StatusLog, '/traj_status', self.status_callback)
@@ -74,15 +52,7 @@ class ArmLogger(LifecycleNode):
         self.trajlog = {}
 
     def connect_to_aws(self):
-        """Attempt to connect to AWS IoT with retries"""
-        while True:
-            try:
-                self.mqtt_client.connect()
-                self.get_logger().info("Connected to AWS IoT")
-                break
-            except Exception as e:
-                self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
-                time.sleep(5)
+        self.mqtt_pub.connect_with_retries()
 
     def get_next_log_filename(self, directory, prefix='log', extension='.txt'):
         files = os.listdir(directory)
@@ -111,19 +81,19 @@ class ArmLogger(LifecycleNode):
                     self.joint_list.append(msg.position[j])
                     count = count + 1
     
-    def publish_with_retry(self, payload, delay=2):
-        while True:
-            try:
-                chunk_size = 128 * 1024
-                chunks = [payload[i:i + chunk_size] for i in range(0, len(payload), chunk_size)]
-                for i, chunk in enumerate(chunks):
-                    self.mqtt_client.publish(topic, chunk, 1)
-                    self.get_logger().info("Message published successfully")
-                break
-            except Exception as e:
-                self.get_logger().error(f"Publish failed: {e}. Retrying in {delay} seconds...")
-                time.sleep(delay)
-                self.connect_to_aws()
+    # def publish_with_retry(self, payload, delay=2):
+    #     while True:
+    #         try:
+    #             chunk_size = 128 * 1024
+    #             chunks = [payload[i:i + chunk_size] for i in range(0, len(payload), chunk_size)]
+    #             for i, chunk in enumerate(chunks):
+    #                 self.mqtt_client.publish(topic, chunk, 1)
+    #                 self.get_logger().info("Message published successfully")
+    #             break
+    #         except Exception as e:
+    #             self.get_logger().error(f"Publish failed: {e}. Retrying in {delay} seconds...")
+    #             time.sleep(delay)
+    #             self.connect_to_aws()
     
     def status_callback(self, request, response):
         self.trajlog = {
@@ -134,7 +104,7 @@ class ArmLogger(LifecycleNode):
         }
         
         payload = json.dumps(self.trajlog)
-        self.publish_with_retry(payload)
+        self.mqtt_pub.publish(payload)
         
         response.success = True
 
@@ -144,7 +114,10 @@ def main():
     rclpy.init(args=None)
 
     arm = ArmLogger()
-    rclpy.spin(arm)
+    while rclpy.ok():
+        rclpy.spin_once(arm, timeout_sec=0.1)
+        arm.mqtt_pub.loop()
+        
     arm.destroy_node()
     exit()
 

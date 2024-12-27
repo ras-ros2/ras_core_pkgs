@@ -34,12 +34,12 @@ from std_msgs.msg import Bool
 from ras_interfaces.msg import Instruction
 import ast
 from trajectory_msgs.msg import JointTrajectory
-from awscrt import mqtt 
+# from awscrt import mqtt 
 import json
-from connection_helper import ConnectionHelper
+# from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-
+from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 import os
 import zipfile
 
@@ -58,10 +58,14 @@ class LinkHandler(Node):
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
         self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
-        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
+        # self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
         discover_endpoints = False
-        self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
+        # self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
+        self.mqtt_pub = TransportMQTTPublisher("test/topic")
+        self.connect_to_aws()
         
+    def connect_to_aws(self):
+        self.mqtt_pub.connect_with_retries()
 
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
@@ -107,11 +111,12 @@ class LinkHandler(Node):
 
     def publish_with_retry(self, payload, delay=2):
         self.get_logger().info("Publishing to AWS IoT")
-        self.connection_helper.mqtt_conn.publish(
-            topic="test/topic",
-            payload=payload,
-            qos=mqtt.QoS.AT_LEAST_ONCE
-        )
+        self.mqtt_pub.publish(payload)
+        # self.connection_helper.mqtt_conn.publish(
+        #     topic="test/topic",
+        #     payload=payload,
+        #     qos=mqtt.QoS.AT_LEAST_ONCE
+        # )
 
         time.sleep(0.25)
 
@@ -120,7 +125,9 @@ def main(args=None):
     node = LinkHandler()
     try:
         while rclpy.ok():
-            rclpy.spin_once(node)
+            rclpy.spin_once(node, timeout_sec=0.1)
+            node.mqtt_pub.loop()
+
     except KeyboardInterrupt:
         pass
     finally:

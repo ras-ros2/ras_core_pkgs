@@ -9,8 +9,9 @@ CONFIG_FILE = CONFIG_PATH/"ras_conf.yaml"
 
 @dataclass
 class RealConfig(ConfigLoaderBase):
-    real: bool
-    sim: bool
+    # real: bool
+    # sim: bool
+    mode: str
 
 @dataclass
 class FTPConfig(ConfigLoaderBase):

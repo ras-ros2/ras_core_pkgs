@@ -30,7 +30,7 @@ from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
-from ras_common.transport.TransportServer import TransportMQTTSubscriber
+from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
 import os
 import json
 import yaml
@@ -63,16 +63,9 @@ class TrajectoryLogger(LifecycleNode):
         # Subscribe to the topic
         self.get_logger().info(f"Subscribed to topic: {cert_data['topic']}")
         self.payload = ''
+
     def connect_to_aws(self):
-        """Attempt to connect to AWS IoT with retries"""
-        while True:
-            try:
-                self.mqtt_sub.mqttsubscriber.connect()
-                self.get_logger().info("Connected to AWS IoT")
-                break
-            except Exception as e:
-                self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
-                time.sleep(5)
+        self.mqtt_sub.connect_with_retries()
 
     def custom_callback(self, message):
         self.payload =  message.payload.decode("utf-8")
@@ -105,9 +98,6 @@ class TrajectoryLogger(LifecycleNode):
                 self.future2 = self.fallback_client.call_async(request)
                 rclpy.spin_until_future_complete(self, self.future2)
 
-
-                
-
         except json.JSONDecodeError as e:
             pass
             # self.get_logger().error(f"JSONDecodeError: {e}")
@@ -123,13 +113,14 @@ def main(args=None):
     receiver = TrajectoryLogger()
     try:
         while rclpy.ok():
-            rclpy.spin_once(receiver)
+            rclpy.spin_once(receiver,timeout_sec=0.1)
+            receiver.mqtt_sub.loop()
     except KeyboardInterrupt:
         pass
     finally:
         # Cleanup and disconnect
         receiver.destroy_node()
-        receiver.mqtt_sub.mqttsubscriber.disconnect()
+        receiver.mqtt_sub.disconnect()
         receiver.get_logger().info("Disconnected from AWS IoT")
         rclpy.shutdown()
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-from ras_common.transport.TransportServer import get_mqtt_broker_command
+from ras_common.transport.TransportWrapper import run_mqtt_broker
 import subprocess
 def main():
-    subprocess.run(get_mqtt_broker_command(), shell=True)
+    try:
+        run_mqtt_broker()
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == '__main__':
     main()

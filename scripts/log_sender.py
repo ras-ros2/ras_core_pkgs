@@ -32,7 +32,7 @@ from rclpy.lifecycle import LifecycleNode
 from sensor_msgs.msg import JointState
 from ras_interfaces.srv import StatusLog
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
-from ras_common.transport.TransportServer import TransportMQTTPublisher
+from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 
 
 class ArmLogger(LifecycleNode):
@@ -52,15 +52,7 @@ class ArmLogger(LifecycleNode):
         self.trajlog = {}
 
     def connect_to_aws(self):
-        """Attempt to connect to AWS IoT with retries"""
-        while True:
-            try:
-                self.mqtt_pub.mqttpublisher.connect()
-                self.get_logger().info("Connected to AWS IoT")
-                break
-            except Exception as e:
-                self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
-                time.sleep(5)
+        self.mqtt_pub.connect_with_retries()
 
     def get_next_log_filename(self, directory, prefix='log', extension='.txt'):
         files = os.listdir(directory)
@@ -112,7 +104,7 @@ class ArmLogger(LifecycleNode):
         }
         
         payload = json.dumps(self.trajlog)
-        self.mqtt_pub.mqttpublisher.publish(payload.encode("utf-8"))
+        self.mqtt_pub.publish(payload)
         
         response.success = True
 
@@ -122,7 +114,10 @@ def main():
     rclpy.init(args=None)
 
     arm = ArmLogger()
-    rclpy.spin(arm)
+    while rclpy.ok():
+        rclpy.spin_once(arm, timeout_sec=0.1)
+        arm.mqtt_pub.loop()
+        
     arm.destroy_node()
     exit()
 

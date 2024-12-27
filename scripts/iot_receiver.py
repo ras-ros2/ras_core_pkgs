@@ -34,8 +34,9 @@ from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import SetPath
-from ras_common.transport.TransportServer import TransportMQTTSubscriber
 from rclpy.executors import MultiThreadedExecutor
+from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+
 import json
 import yaml
 import time
@@ -64,15 +65,7 @@ class TrajectoryLogger(LifecycleNode):
         # self.get_logger().info(f"Subscribed to topic: {cert_data['topic']}")
         self.payload = ''
     def connect_to_aws(self):
-        """Attempt to connect to AWS IoT with retries"""
-        while True:
-            try:
-                self.mqtt_sub.mqttsubscriber.connect()
-                self.get_logger().info("Connected to AWS IoT")
-                break
-            except Exception as e:
-                self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
-                time.sleep(5)
+        self.mqtt_sub.connect_with_retries()
 
     def custom_callback(self, message):
         self.payload =  message.decode("utf-8")
@@ -82,29 +75,20 @@ class TrajectoryLogger(LifecycleNode):
 
         print("Downloading the file using wget...")
         result = subprocess.run(
-<<<<<<< Updated upstream
-        ["cp", f"{os.environ['RAS_APP_PATH']}/serve/traj.zip", f"{extract_path}"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-        print("Download completed:")
-=======
             ["cp", f"{os.environ['RAS_APP_PATH']}/serve/traj.zip", f"{extract_path}"],
             check=True,
             capture_output=True,
             text=True,
         )
         print("Download completed")
->>>>>>> Stashed changes
 
         extract_path = os.path.join(os.environ['RAS_WORKSPACE_PATH'], "src", "ras_aws_transport", "real_bot_zip")
 
         result2 = subprocess.run(
-        ["unzip", "-o", f"{extract_path}/traj.zip", "-d", f"{extract_path}"],
-        check=True,
-        capture_output=True,
-        text=True
+            ["unzip", "-o", f"{extract_path}/traj.zip", "-d", f"{extract_path}"],
+            check=True,
+            capture_output=True,
+            text=True
         )
 
         path_zip = SetPath.Request()
@@ -123,7 +107,8 @@ def main(args=None):
     try:
         while rclpy.ok():
             my_exec.spin_once(timeout_sec=0.1)
-            receiver.mqtt_sub.mqttsubscriber.client.loop()
+            receiver.mqtt_sub.loop()
+
     except KeyboardInterrupt:
         pass
     finally:

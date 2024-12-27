@@ -39,7 +39,7 @@ import json
 # from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-from ras_common.transport.TransportServer import TransportMQTTPublisher
+from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 import os
 import zipfile
 
@@ -65,15 +65,7 @@ class LinkHandler(Node):
         self.connect_to_aws()
         
     def connect_to_aws(self):
-        """Attempt to connect to AWS IoT with retries"""
-        while True:
-            try:
-                self.mqtt_pub.mqttpublisher.connect()
-                self.get_logger().info("Connected to AWS IoT")
-                break
-            except Exception as e:
-                self.get_logger().error(f"Connection to AWS IoT failed: {e}. Retrying in 5 seconds...")
-                time.sleep(5)
+        self.mqtt_pub.connect_with_retries()
 
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
@@ -119,7 +111,7 @@ class LinkHandler(Node):
 
     def publish_with_retry(self, payload, delay=2):
         self.get_logger().info("Publishing to AWS IoT")
-        self.mqtt_pub.mqttpublisher.publish(payload.encode("utf-8"))
+        self.mqtt_pub.publish(payload)
         # self.connection_helper.mqtt_conn.publish(
         #     topic="test/topic",
         #     payload=payload,
@@ -133,8 +125,8 @@ def main(args=None):
     node = LinkHandler()
     try:
         while rclpy.ok():
-            rclpy.spin_once(node)
-            node.mqtt_pub.mqttpublisher.client.loop()
+            rclpy.spin_once(node, timeout_sec=0.1)
+            node.mqtt_pub.loop()
 
     except KeyboardInterrupt:
         pass

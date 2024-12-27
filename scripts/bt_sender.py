@@ -35,7 +35,7 @@ from rclpy.node import Node
 # import boto3
 from ras_interfaces.srv import SetPath
 # from botocore.config import Config
-from ras_common.transport.TransportServer import TransportFTPClient
+from ras_common.transport.TransportWrapper import TransportFileClient
 
 
 class BucketUpload(Node):
@@ -44,20 +44,19 @@ class BucketUpload(Node):
         self.get_logger().info("Node Initialized")
         self.create_service(SetPath, "/send_file", self.upload_callback)
         self.object_name = "traj.zip"
-        self.ftp_client = TransportFTPClient("real")
+        self.file_client = TransportFileClient("real")
     
     def upload_callback(self, req, resp):
-
         file_path = req.path
         self.get_logger().info(f"{self.object_name} Sucessfully Uploaded")
-        self.ftp_client.ftpclient.upload(file_path, self.object_name)
+        self.file_client.upload(file_path, self.object_name)
         resp.link = self.object_name
         return resp
     
 def main():
     rclpy.init(args=None)
     node = BucketUpload()
-    node.ftp_client.ftpclient.connect()
+    node.file_client.connect_with_retries()
     rclpy.spin(node)
     rclpy.shutdown()
 

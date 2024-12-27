@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-from ras_common.transport.TransportServer import TransportFTPServer
+from ras_common.transport.TransportWrapper import TransportFileServer
 import rclpy
 def main(args=None):
     rclpy.init(args=args)
-    ftp_server = TransportFTPServer("real")
+    ftp_server = TransportFileServer("real")
+    
     try:
         ftp_server.ftpserver.connect()
         ftp_server.ftpserver.serve()

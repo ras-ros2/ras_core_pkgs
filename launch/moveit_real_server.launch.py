@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from ras_common.lab_loader import LabLoader
+from ras_common.config.loaders.lab_setup import LabSetup as LabLoader
 from ras_resource_lib.managers.asset_manager import AssetManager,AssetType
 from ras_resource_lib.types.manipulator.component import ManipulatorComponent
 

@@ -21,31 +21,47 @@ Email: info@opensciencestack.org
 
 import os
 from pathlib import Path
-import yaml
-from geometry_msgs.msg import Pose
+from ..file_utils.formats.yaml import YamlFormat
 import tf_transformations
+
+from geometry_msgs.msg import Pose
+from .ConfigLoaderBase import ConfigLoaderBase
+from dataclasses import dataclass
+from .common import PoseConfig
+
 CONFIGS_PATH = Path(os.environ["RAS_APP_PATH"])/"configs"
 CONFIG_FILE = CONFIGS_PATH/"lab_setup.yaml"
 
-class LabLoader(object):
+@dataclass
+class RobotConfig(ConfigLoaderBase):
+    name: str
+    pose: PoseConfig
+
+@dataclass
+class LabSetupConfig(ConfigLoaderBase):
+    lab_name: str
+    robot: RobotConfig
+
+class LabSetup(object):
     _initialized = False
-    lab_name : str = None
+    conf : LabSetupConfig = None
     robot_name : str = None
+    lab_name : str = None
     robot_pose : Pose = None
     @classmethod
     def init(cls):
         if cls._initialized:
             return
-        yaml_obj = yaml.load(CONFIG_FILE.open())["lab_setup"]
-        cls.lab_name = yaml_obj["lab_name"]
-        robot_obj = yaml_obj["robot"]
-        cls.robot_name = robot_obj["name"]
-        robot_pose_obj = robot_obj["pose"]
+        yaml_obj = YamlFormat.load(CONFIG_FILE)["lab_setup"]
+        cls.conf = LabSetupConfig.from_dict(yaml_obj)
+        cls.lab_name = cls.conf.lab_name
+        cls.robot_name = cls.conf.robot.name
         cls.robot_pose = Pose()
-        cls.robot_pose.position.x = robot_pose_obj["pos"]["x"]
-        cls.robot_pose.position.y = robot_pose_obj["pos"]["y"]
-        cls.robot_pose.position.z = robot_pose_obj["pos"]["z"]
-        qx, qy, qz, qw = tf_transformations.quaternion_from_euler(robot_pose_obj["rot"]['r'], robot_pose_obj["rot"]['p'], robot_pose_obj["rot"]['y'])
+        r_pose = cls.conf.robot.pose
+        cls.robot_pose.position.x = r_pose.x
+        cls.robot_pose.position.y = r_pose.y
+        cls.robot_pose.position.z = r_pose.z
+        qx, qy, qz, qw = tf_transformations.quaternion_from_euler(r_pose.roll, r_pose.pitch, r_pose.yaw)
         cls.robot_pose.orientation.x = qx
         cls.robot_pose.orientation.y = qy
         cls.robot_pose.orientation.z = qz

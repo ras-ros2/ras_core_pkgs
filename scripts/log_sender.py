@@ -31,6 +31,9 @@ from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from sensor_msgs.msg import JointState
 from ras_interfaces.srv import StatusLog
+from rclpy.wait_for_message import wait_for_message
+from aruco_interfaces.msg import ArucoMarkers
+from rclpy_message_converter import json_message_converter
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 
@@ -45,6 +48,8 @@ class ArmLogger(LifecycleNode):
 
         joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_callback, 10)
         log_srv = self.create_service(StatusLog, '/traj_status', self.status_callback)
+
+        self.topic_name = '/aruco_markers'
 
         self.connect_to_aws()
 
@@ -94,13 +99,30 @@ class ArmLogger(LifecycleNode):
     #             self.get_logger().error(f"Publish failed: {e}. Retrying in {delay} seconds...")
     #             time.sleep(delay)
     #             self.connect_to_aws()
+
+    def aruco_logger(self):
+        self.aruco_list = []
+        ret, msg = wait_for_message(ArucoMarkers, self, self.topic_name, qos_profile=self.qos_value, time_to_wait=self.timeout_value)
+        if not ret:
+            self.get_logger().error('No message received for topic %s' % self.topic_name)
+        else:
+            self.get_logger().info('Message received for topic %s' % self.topic_name)
+            json_msg = json_message_converter.convert_ros_message_to_json(msg)
+            self.aruco_list.append(json_msg)
+        self.get_logger().info('Aruco Logging request received')
     
     def status_callback(self, request, response):
+        try:
+            self.aruco_logger()
+        except:
+            pass
+        
         self.trajlog = {
             "joint_state" : self.joint_list,
             "traj_status" : request.traj_status,
             "gripper_status" : request.gripper_status,
-            "current_traj" : request.current_traj
+            "current_traj" : request.current_traj,
+            "aruco_updates" : self.aruco_list
         }
         
         payload = json.dumps(self.trajlog)

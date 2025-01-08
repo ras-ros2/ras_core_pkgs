@@ -40,7 +40,8 @@ from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
 import json
 import yaml
 import time
-from ras_interfaces.action import BTInterface
+from ras_bt_framework.managers.BaTMan import BaTMan
+from ras_interfaces.msg import BTNodeStatus
 
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
@@ -51,12 +52,12 @@ class TrajectoryLogger(LifecycleNode):
         # self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
         # self.fallback_client = self.create_client(LoadExp, "/fallback_info", callback_group=my_callback_group)
         self.path_client = self.create_client(SetPath, '/load_path')
-        self._action_client = ActionClient(self,BTInterface,"bt_executor")
 
         self.instruction_msg = []
 
         self.instruction_flag = True
         self.mqtt_sub = TransportMQTTSubscriber("test/topic", self.custom_callback)
+        self.batman = BaTMan()
         # Connect to AWS IoT
         self.connect_to_aws()
 
@@ -95,15 +96,17 @@ class TrajectoryLogger(LifecycleNode):
         path_zip.path = extract_path
         self.path_client.call_async(path_zip)
 
-        goal_msg = BTInterface.Goal()
-        goal_msg.bt_path = path_zip.path + "/real.xml"
-        self._action_client.send_goal_async(goal_msg)
+        bt_path = path_zip.path + "/real.xml"
+        status = self.batman.execute_bt(bt_path)
+        if status in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
+            self.get_logger().info("Behavior Tree Execution Successful")
 
 def main(args=None):
     rclpy.init(args=args)
     receiver = TrajectoryLogger()
     my_exec = MultiThreadedExecutor(num_threads=2)
     my_exec.add_node(receiver)
+    my_exec.add_node(receiver.batman)
     try:
         while rclpy.ok():
             my_exec.spin_once(timeout_sec=0.1)

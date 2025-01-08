@@ -25,9 +25,9 @@ class TransportFileServer(object):
 
     def safe_kill(self):
         self.ftpserver.safe_kill()
-    
+
     def __del__(self):
-        self.ftpserver.safe_kill()
+        self.safe_kill()
 
 class TransportFileClient(object):
     def __init__(self, name: str) -> None:
@@ -61,8 +61,11 @@ class TransportFileClient(object):
     def download(self, remote_path: Path, local_path: Path):
         self.ftpclient.download(remote_path, local_path)
     
-    def __del__(self):
+    def disconnect(self):
         self.ftpclient.disconnect()
+    
+    def __del__(self):
+        self.disconnect()
 
 class TransportMQTTPublisher(object):
     def __init__(self,topic_name) -> None:
@@ -100,9 +103,12 @@ class TransportMQTTPublisher(object):
 
     def loop(self):
         self.mqttpublisher.loop()
+
+    def disconnect(self):
+        self.mqttpublisher.disconnect()
     
     def __del__(self):
-        self.mqttpublisher.disconnect()
+        self.disconnect()
 
 class TransportMQTTSubscriber(object):
     def __init__(self,topic_name,callback) -> None:
@@ -132,8 +138,11 @@ class TransportMQTTSubscriber(object):
     def loop(self):
         self.mqttsubscriber.loop()
     
-    def __del__(self):
+    def disconnect(self):
         self.mqttsubscriber.disconnect()
+
+    def __del__(self):
+        self.disconnect()
 
 def run_mqtt_broker():
     TransportLoader.init()

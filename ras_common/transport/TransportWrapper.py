@@ -68,6 +68,7 @@ class TransportMQTTPublisher(object):
     def __init__(self,topic_name) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
+        self.topic_name = topic_name
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         publisher = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).publisher
         self.mqttpublisher = publisher(topic_name,mqtt_conf.ip,mqtt_conf.port)
@@ -94,6 +95,7 @@ class TransportMQTTPublisher(object):
             payload = payload.encode("utf-8")
         if not isinstance(payload,bytes):
             raise Exception("Payload must be of type bytes, str or dict")
+        print(f"Publishing to {self.topic_name}")
         self.mqttpublisher.publish(payload)
 
     def loop(self):
@@ -108,7 +110,10 @@ class TransportMQTTSubscriber(object):
         RasConfigLoader.init()
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         subscriber = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).subscriber
-        self.mqttsubscriber = subscriber(topic_name,mqtt_conf.ip,mqtt_conf.port,callback)
+        def callback_wrapper(payload):
+            print(f"Received message on {topic_name}")
+            callback(payload)
+        self.mqttsubscriber = subscriber(topic_name,mqtt_conf.ip,mqtt_conf.port,callback_wrapper)
     
     def connect(self):
         self.mqttsubscriber.connect()

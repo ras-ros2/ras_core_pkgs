@@ -44,10 +44,6 @@ class TrajectoryLogger(LifecycleNode):
 
         self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
 
-        self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "log_receiver_config.json")
-
-        with open(self.path_for_config) as f:
-          cert_data = json.load(f)
 
         self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
         self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
@@ -60,15 +56,13 @@ class TrajectoryLogger(LifecycleNode):
         # Connect to AWS IoT
         self.connect_to_aws()
 
-        # Subscribe to the topic
-        self.get_logger().info(f"Subscribed to topic: {cert_data['topic']}")
         self.payload = ''
 
     def connect_to_aws(self):
         self.mqtt_sub.connect_with_retries()
 
     def custom_callback(self, message):
-        self.payload =  message.payload.decode("utf-8")
+        self.payload =  message.decode("utf-8")
         self.get_logger().info("Received Message")
 
         if not self.payload:

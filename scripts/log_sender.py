@@ -33,6 +33,9 @@ from sensor_msgs.msg import JointState
 from ras_interfaces.srv import StatusLog
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from ras_common.transport.TransportWrapper import TransportMQTTPublisher
+from aruco_interfaces.msg import ArucoMarkers
+from rclpy_message_converter import json_message_converter
+
 
 
 class ArmLogger(LifecycleNode):
@@ -44,8 +47,9 @@ class ArmLogger(LifecycleNode):
         self.mqtt_pub = TransportMQTTPublisher("last/will/topic")
 
         joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_callback, 10)
-        log_srv = self.create_service(StatusLog, '/traj_status', self.status_callback)
-
+        log_srv = self.create_service(StatusLog, '/send_logging', self.status_callback)
+        self.create_subscription(ArucoMarkers, '/aruco_markers', self.aruco_callback, 10)
+        
         self.connect_to_aws()
 
         self.joint_status = JointState()
@@ -53,6 +57,9 @@ class ArmLogger(LifecycleNode):
 
     def connect_to_aws(self):
         self.mqtt_pub.connect_with_retries()
+    
+    def aruco_callback(self, msg):
+        self.aruco_data = json_message_converter.convert_ros_message_to_json(msg)
 
     def get_next_log_filename(self, directory, prefix='log', extension='.txt'):
         files = os.listdir(directory)
@@ -81,26 +88,13 @@ class ArmLogger(LifecycleNode):
                     self.joint_list.append(msg.position[j])
                     count = count + 1
     
-    # def publish_with_retry(self, payload, delay=2):
-    #     while True:
-    #         try:
-    #             chunk_size = 128 * 1024
-    #             chunks = [payload[i:i + chunk_size] for i in range(0, len(payload), chunk_size)]
-    #             for i, chunk in enumerate(chunks):
-    #                 self.mqtt_client.publish(topic, chunk, 1)
-    #                 self.get_logger().info("Message published successfully")
-    #             break
-    #         except Exception as e:
-    #             self.get_logger().error(f"Publish failed: {e}. Retrying in {delay} seconds...")
-    #             time.sleep(delay)
-    #             self.connect_to_aws()
-    
     def status_callback(self, request, response):
         self.trajlog = {
             "joint_state" : self.joint_list,
             "traj_status" : request.traj_status,
             "gripper_status" : request.gripper_status,
-            "current_traj" : request.current_traj
+            "current_traj" : request.current_traj,
+            "aruco_markers" : self.aruco_data
         }
         
         payload = json.dumps(self.trajlog)

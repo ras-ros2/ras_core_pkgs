@@ -76,7 +76,7 @@ class TrajectoryLogger(LifecycleNode):
 
         print("Downloading the file using wget...")
         result = subprocess.run(
-            ["cp", f"{os.environ['RAS_APP_PATH']}/serve/traj.zip", f"{extract_path}"],
+            ["cp", f"{os.environ['RAS_APP_PATH']}/serve/xml_directory.zip", f"{extract_path}"],
             check=True,
             capture_output=True,
             text=True,
@@ -86,7 +86,7 @@ class TrajectoryLogger(LifecycleNode):
         extract_path = os.path.join(os.environ['RAS_WORKSPACE_PATH'], "src", "ras_aws_transport", "real_bot_zip")
 
         result2 = subprocess.run(
-            ["unzip", "-o", f"{extract_path}/traj.zip", "-d", f"{extract_path}"],
+            ["unzip", "-o", f"{extract_path}/xml_directory.zip", "-d", f"{extract_path}"],
             check=True,
             capture_output=True,
             text=True

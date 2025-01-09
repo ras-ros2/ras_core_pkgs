@@ -28,6 +28,7 @@ from geometry_msgs.msg import Pose
 from .ConfigLoaderBase import ConfigLoaderBase
 from dataclasses import dataclass
 from .common import PoseConfig
+import os 
 
 CONFIGS_PATH = Path(os.environ["RAS_APP_PATH"])/"configs"
 CONFIG_FILE = CONFIGS_PATH/"lab_setup.yaml"
@@ -40,6 +41,7 @@ class RobotConfig(ConfigLoaderBase):
 @dataclass
 class LabSetupConfig(ConfigLoaderBase):
     lab_name: str
+    real_sim: str
     robot: RobotConfig
 
 class LabSetup(object):
@@ -55,6 +57,9 @@ class LabSetup(object):
         yaml_obj = YamlFormat.load(CONFIG_FILE)["lab_setup"]
         cls.conf = LabSetupConfig.from_dict(yaml_obj)
         cls.lab_name = cls.conf.lab_name
+        if ("RAS_APP_NAME" in  os.environ) and (os.environ["RAS_APP_NAME"]=="ras_real_lab"):
+            cls.lab_name = cls.conf.real_sim
+
         cls.robot_name = cls.conf.robot.name
         cls.robot_pose = Pose()
         r_pose = cls.conf.robot.pose
@@ -67,6 +72,9 @@ class LabSetup(object):
         cls.robot_pose.orientation.z = qz
         cls.robot_pose.orientation.w = qw
         cls._initialized = True
+
+
+        
     
     
         

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from ras_common.config.loaders.ConfigLoaderBase import ConfigLoaderBase
+from ras_common.config.loaders.lab_setup import LabSetup
 from dataclasses import dataclass
 # Example usage
 @dataclass
@@ -19,9 +20,11 @@ config_data = {
         'param2': 'hello'}
 }
 def main():
-    config_instance = MyConfig2.from_dict(config_data)
-    print(config_instance)
-    print(MyConfig2.to_dict())
+    LabSetup.init()
+    print(LabSetup.lab_name)
+    # config_instance = MyConfig2.from_dict(config_data)
+    # print(config_instance)
+    # print(MyConfig2.to_dict())
 
 if __name__ == "__main__":
     main()

@@ -25,9 +25,9 @@ class TransportFileServer(object):
 
     def safe_kill(self):
         self.ftpserver.safe_kill()
-    
+
     def __del__(self):
-        self.ftpserver.safe_kill()
+        self.safe_kill()
 
 class TransportFileClient(object):
     def __init__(self, name: str) -> None:
@@ -61,13 +61,17 @@ class TransportFileClient(object):
     def download(self, remote_path: Path, local_path: Path):
         self.ftpclient.download(remote_path, local_path)
     
-    def __del__(self):
+    def disconnect(self):
         self.ftpclient.disconnect()
+    
+    def __del__(self):
+        self.disconnect()
 
 class TransportMQTTPublisher(object):
     def __init__(self,topic_name) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
+        self.topic_name = topic_name
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         publisher = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).publisher
         self.mqttpublisher = publisher(topic_name,mqtt_conf.ip,mqtt_conf.port)
@@ -94,13 +98,17 @@ class TransportMQTTPublisher(object):
             payload = payload.encode("utf-8")
         if not isinstance(payload,bytes):
             raise Exception("Payload must be of type bytes, str or dict")
+        print(f"Publishing to {self.topic_name}")
         self.mqttpublisher.publish(payload)
 
     def loop(self):
         self.mqttpublisher.loop()
+
+    def disconnect(self):
+        self.mqttpublisher.disconnect()
     
     def __del__(self):
-        self.mqttpublisher.disconnect()
+        self.disconnect()
 
 class TransportMQTTSubscriber(object):
     def __init__(self,topic_name,callback) -> None:
@@ -108,7 +116,10 @@ class TransportMQTTSubscriber(object):
         RasConfigLoader.init()
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         subscriber = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).subscriber
-        self.mqttsubscriber = subscriber(topic_name,mqtt_conf.ip,mqtt_conf.port,callback)
+        def callback_wrapper(payload):
+            print(f"Received message on {topic_name}")
+            callback(payload)
+        self.mqttsubscriber = subscriber(topic_name,mqtt_conf.ip,mqtt_conf.port,callback_wrapper)
     
     def connect(self):
         self.mqttsubscriber.connect()
@@ -127,8 +138,11 @@ class TransportMQTTSubscriber(object):
     def loop(self):
         self.mqttsubscriber.loop()
     
-    def __del__(self):
+    def disconnect(self):
         self.mqttsubscriber.disconnect()
+
+    def __del__(self):
+        self.disconnect()
 
 def run_mqtt_broker():
     TransportLoader.init()

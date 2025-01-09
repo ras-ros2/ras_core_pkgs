@@ -178,11 +178,14 @@ class HttpServer(FileServerInterface):
         assert self.path.exists()
         self.ip = ip
         self.port = port
-        self.server = None
+        self._connected = False
         self.app = Flask(__name__)
         self.app.config['SERVE_FOLDER'] = str(self.path.resolve().absolute())
 
     def connect(self) -> None:
+        if self.is_connected():
+            return
+        self._connected = True
         @self.app.route('/')
         def home():
             files = [ str(_path) for _path in self.path.glob("*") ]
@@ -246,8 +249,7 @@ class HttpServer(FileServerInterface):
     def serve(self) -> None:
         if not self.is_connected():
             self.connect()
-        else:
-            self.app.run(port=self.port)
+        self.app.run(port=self.port)
     
     def disconnect(self) -> None:
         if not self.is_connected():
@@ -262,7 +264,7 @@ class HttpServer(FileServerInterface):
         self.server = None
     
     def is_connected(self) -> bool:
-        return self.server is not None
+        return self._connected
 
     def safe_kill(self) -> None:
         self.disconnect()
@@ -332,9 +334,9 @@ default_transport = TransportImplementation(
     name = "default",
     publisher = MqttPublisher,
     subscriber = MqttSubscriber,
-    file_server = FtpServer,
-    file_client = FtpClient,
-    # file_server = HttpServer,
-    # file_client = HttpClient,
+    # file_server = FtpServer,
+    # file_client = FtpClient,
+    file_server = HttpServer,
+    file_client = HttpClient,
     brocker_func = run_mosquitto_broker
 )

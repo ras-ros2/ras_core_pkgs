@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-from ras_common.package.utils import get_cmake_python_pkg_source_dir
-# from ras_common.config.loaders.ConfigLoaderBase import ConfigLoaderBase
-# from dataclasses import dataclass
-# # Example usage
-# @dataclass
-# class MyConfig(ConfigLoaderBase):
-#     param1: float
-#     param2: str
+from ras_common.config.loaders.ConfigLoaderBase import ConfigLoaderBase
+from ras_common.config.loaders.lab_setup import LabSetup
+from dataclasses import dataclass
+# Example usage
+@dataclass
+class MyConfig(ConfigLoaderBase):
+    param1: float
+    param2: str
+
 
 # @dataclass
 # class MyConfig2(ConfigLoaderBase):
@@ -20,11 +21,12 @@ from ras_common.package.utils import get_cmake_python_pkg_source_dir
 #         'param2': 'hello'}
 # }
 def main():
+    LabSetup.init()
+    print(LabSetup.lab_name)
     # config_instance = MyConfig2.from_dict(config_data)
     # print(config_instance)
     # print(MyConfig2.to_dict())
-    print(get_cmake_python_pkg_source_dir("ras_common"))
-    print(get_cmake_python_pkg_source_dir("ras_bt_framework"))
+
 
 if __name__ == "__main__":
     main()

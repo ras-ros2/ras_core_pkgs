@@ -25,12 +25,13 @@ import rclpy
 from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from ras_interfaces.srv import JointSat, LoadExp
+from ras_interfaces.srv import JointSat, LoadExp, ArucoPoses
 from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+from geometry_msgs.msg import Pose, Point, Quaternion
 import os
 import json
 import yaml
@@ -49,9 +50,11 @@ class TrajectoryLogger(LifecycleNode):
         self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
         self.fallback_client = self.create_client(LoadExp, "/fallback_info", callback_group=my_callback_group)
         # Initialize the MQTT client
+        self.aruco_client = self.create_client(ArucoPoses, "/aruco_poses", callback_group=my_callback_group)
         self.instruction_msg = []
         self.mqtt_sub = TransportMQTTSubscriber("last/will/topic", self.custom_callback)
         self.instruction_flag = True
+        self.aruco_sync_flag = True
 
         # Connect to AWS IoT
         self.connect_to_aws()
@@ -71,15 +74,30 @@ class TrajectoryLogger(LifecycleNode):
 
         try:
             log_data = json.loads(self.payload)
-            with open("log.txt", 'a') as file:
+            with open("/ras_sim_lab/logs/log.txt", 'a') as file:
                 yaml.dump(log_data, file)
+
+            if self.aruco_sync_flag == True:
+                aruco_pose = ArucoPoses.Request()
+                poses_list = json.loads(log_data["aruco_markers"])["poses"]
+    
+                aruco_pose.poses = [
+                    Pose(
+                        position=Point(x=pose["position"]["x"], y=pose["position"]["y"], z=pose["position"]["z"]),
+                        orientation=Quaternion(x=pose["orientation"]["x"], y=pose["orientation"]["y"], z=pose["orientation"]["z"], w=pose["orientation"]["w"])
+                    ) for pose in poses_list
+                ]
+                
+                self.aruco_client.call_async(aruco_pose)
+                self.get_logger().info("Spawing Started...")
+                # self.aruco_sync_flag = False
+                
             if log_data["traj_status"] == "SUCCESS":
                 print("SUCCESS")
                 request = JointSat.Request()
                 request.joint_state.position = log_data["joint_state"]
                 self.future = self.service_sync.call_async(request)
                 rclpy.spin_until_future_complete(self, self.future)
-
 
             if log_data["traj_status"] == "FAILED":
                 print("FAILED")
@@ -100,7 +118,7 @@ class TrajectoryLogger(LifecycleNode):
             # self.get_logger().error(f"KeyError: {e}")
         except Exception as e:
             pass
-            # self.get_logger().error(f"Error: {e}")
+            self.get_logger().error(f"Error: {e}")
 
 def main(args=None):
     rclpy.init(args=args)

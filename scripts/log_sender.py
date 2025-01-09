@@ -33,6 +33,9 @@ from sensor_msgs.msg import JointState
 from ras_interfaces.srv import StatusLog
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from ras_common.transport.TransportWrapper import TransportMQTTPublisher
+from aruco_interfaces.msg import ArucoMarkers
+from rclpy_message_converter import json_message_converter
+
 
 
 class ArmLogger(LifecycleNode):
@@ -45,7 +48,8 @@ class ArmLogger(LifecycleNode):
 
         joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_callback, 10)
         log_srv = self.create_service(StatusLog, '/traj_status', self.status_callback)
-
+        self.create_subscription(ArucoMarkers, '/aruco_markers', self.aruco_callback, 10)
+        
         self.connect_to_aws()
 
         self.joint_status = JointState()
@@ -53,6 +57,9 @@ class ArmLogger(LifecycleNode):
 
     def connect_to_aws(self):
         self.mqtt_pub.connect_with_retries()
+    
+    def aruco_callback(self, msg):
+        self.aruco_data = json_message_converter.convert_ros_message_to_json(msg)
 
     def get_next_log_filename(self, directory, prefix='log', extension='.txt'):
         files = os.listdir(directory)
@@ -100,7 +107,8 @@ class ArmLogger(LifecycleNode):
             "joint_state" : self.joint_list,
             "traj_status" : request.traj_status,
             "gripper_status" : request.gripper_status,
-            "current_traj" : request.current_traj
+            "current_traj" : request.current_traj,
+            "aruco_markers" : self.aruco_data
         }
         
         payload = json.dumps(self.trajlog)

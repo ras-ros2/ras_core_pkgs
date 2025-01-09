@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict, is_dataclass, fields
-from typing import Type, TypeVar, Dict, Any, get_type_hints
+from typing import Type, TypeVar, Dict, Any, get_origin,get_type_hints,_BaseGenericAlias as BaseGenericAlias
 import dataclasses
 import inspect
 T = TypeVar('T')
@@ -22,7 +22,12 @@ class ConfigLoaderBase:
             field_default = field.default
             if field_default == dataclasses.MISSING:
                 field_default = None
-            elems_dict[name] = ConfigElem(name, resolved_hints[name],field_default, field)
+            field_type = resolved_hints[name]
+            if(isinstance(field_type, BaseGenericAlias)):
+                field_type = get_origin(field_type)
+            if not isinstance(field_type, type):
+                raise Exception(f"Expected type, got {type(field_type)}")
+            elems_dict[name] = ConfigElem(name,field_type,field_default, field)
         return elems_dict
     
     @classmethod

@@ -90,7 +90,7 @@ class TrajectoryLogger(LifecycleNode):
                 
                 self.aruco_client.call_async(aruco_pose)
                 self.get_logger().info("Spawing Started...")
-                self.aruco_sync_flag = False
+                # self.aruco_sync_flag = False
                 
             if log_data["traj_status"] == "SUCCESS":
                 print("SUCCESS")

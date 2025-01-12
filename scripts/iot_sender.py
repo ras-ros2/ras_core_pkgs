@@ -58,7 +58,7 @@ class LinkHandler(Node):
         self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
-        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
+        # self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
         # self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
         discover_endpoints = False
         # self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
@@ -71,7 +71,8 @@ class LinkHandler(Node):
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
         zip_file_path = self.zip_xml_directory()
-        path = os.path.join(self.ws_path, "src", "ras_bt_framework", "xml", "xml_directory.zip")
+        pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")  
+        path = os.path.join(str(pkg_path), "xml", "xml_directory.zip")
         self.send_zip_file_path(path)
         result = ExecuteExp.Result()
         result.success = True

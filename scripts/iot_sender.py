@@ -42,6 +42,7 @@ from ras_interfaces.action import ExecuteExp
 from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 import os
 import zipfile
+from ras_common.package.utils import get_cmake_python_pkg_source_dir
 
 
 
@@ -92,22 +93,30 @@ class LinkHandler(Node):
     def zip_xml_directory(self):
     # Get the directory of the current script
         script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
+
+        if pkg_path is None:
+            print("Could not find the package path for ras_bt_framework")
+
+            return ""
         
-        # Define the path to the xml directory
-        xml_dir_path = "/ras_sim_lab/ros2_ws/src/ras_bt_framework/xml/"
+        else:
+            # Define the path to the xml directory
+            xml_dir_path = os.path.join(pkg_path, "xml")
+            
+            # Define the path for the output zip file
+            zip_file_path = xml_dir_path+"/xml_directory.zip"
+            
+            # Create a zip file and add all files in the xml directory to it
+            with zipfile.ZipFile(zip_file_path, 'w') as zipf:
+                for root, dirs, files in os.walk(xml_dir_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, start=xml_dir_path)
+                        zipf.write(file_path, arcname)
         
-        # Define the path for the output zip file
-        zip_file_path = "/ras_sim_lab/ros2_ws/src/ras_bt_framework/xml/xml_directory.zip"
-        
-        # Create a zip file and add all files in the xml directory to it
-        with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-            for root, dirs, files in os.walk(xml_dir_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, start=xml_dir_path)
-                    zipf.write(file_path, arcname)
-        
-        return zip_file_path
+            return zip_file_path
 
     def publish_with_retry(self, payload, delay=2):
         self.get_logger().info("Publishing to AWS IoT")

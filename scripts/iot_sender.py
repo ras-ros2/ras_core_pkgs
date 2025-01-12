@@ -42,6 +42,7 @@ from ras_interfaces.action import ExecuteExp
 from ras_common.transport.TransportWrapper import TransportMQTTPublisher
 import os
 import zipfile
+from ras_common.package.utils import get_cmake_python_pkg_source_dir
 
 
 
@@ -57,7 +58,7 @@ class LinkHandler(Node):
         self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
-        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
+        # self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
         # self.path_for_config = os.path.join(self.ws_path, "src", "ras_aws_transport", "aws_configs", "iot_sender_config.json")
         discover_endpoints = False
         # self.connection_helper = ConnectionHelper(self.get_logger(), self.path_for_config, discover_endpoints)
@@ -70,7 +71,8 @@ class LinkHandler(Node):
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
         zip_file_path = self.zip_xml_directory()
-        path = os.path.join(self.ws_path, "src", "ras_bt_framework", "xml", "xml_directory.zip")
+        pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")  
+        path = os.path.join(str(pkg_path), "xml", "xml_directory.zip")
         self.send_zip_file_path(path)
         result = ExecuteExp.Result()
         result.success = True
@@ -92,22 +94,30 @@ class LinkHandler(Node):
     def zip_xml_directory(self):
     # Get the directory of the current script
         script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
+
+        if pkg_path is None:
+            print("Could not find the package path for ras_bt_framework")
+
+            return ""
         
-        # Define the path to the xml directory
-        xml_dir_path = "/ras_sim_lab/ros2_ws/src/ras_bt_framework/xml/"
+        else:
+            # Define the path to the xml directory
+            xml_dir_path = os.path.join(pkg_path, "xml")
+            
+            # Define the path for the output zip file
+            zip_file_path = xml_dir_path+"/xml_directory.zip"
+            
+            # Create a zip file and add all files in the xml directory to it
+            with zipfile.ZipFile(zip_file_path, 'w') as zipf:
+                for root, dirs, files in os.walk(xml_dir_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, start=xml_dir_path)
+                        zipf.write(file_path, arcname)
         
-        # Define the path for the output zip file
-        zip_file_path = "/ras_sim_lab/ros2_ws/src/ras_bt_framework/xml/xml_directory.zip"
-        
-        # Create a zip file and add all files in the xml directory to it
-        with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-            for root, dirs, files in os.walk(xml_dir_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, start=xml_dir_path)
-                    zipf.write(file_path, arcname)
-        
-        return zip_file_path
+            return zip_file_path
 
     def publish_with_retry(self, payload, delay=2):
         self.get_logger().info("Publishing to AWS IoT")

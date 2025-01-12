@@ -80,7 +80,10 @@ class TrajectoryLogger(LifecycleNode):
             if self.aruco_sync_flag == True:
                 aruco_pose = ArucoPoses.Request()
                 poses_list = json.loads(log_data["aruco_markers"])["poses"]
-    
+                marker_id_list = json.loads(log_data["aruco_markers"])["marker_ids"]
+
+                aruco_pose.marker_id_list = marker_id_list
+
                 aruco_pose.poses = [
                     Pose(
                         position=Point(x=pose["position"]["x"], y=pose["position"]["y"], z=pose["position"]["z"]),

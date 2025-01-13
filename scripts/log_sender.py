@@ -45,12 +45,12 @@ class ArmLogger(LifecycleNode):
         self.get_logger().info('NODE STARTED')
 
         self.mqtt_pub = TransportMQTTPublisher("last/will/topic")
+        self.connect_to_aws()
 
         joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_callback, 10)
         log_srv = self.create_service(StatusLog, '/send_logging', self.status_callback)
         self.create_subscription(ArucoMarkers, '/aruco_markers', self.aruco_callback, 10)
-        
-        self.connect_to_aws()
+        self.aruco_data = dict()
 
         self.joint_status = JointState()
         self.trajlog = {}

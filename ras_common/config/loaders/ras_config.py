@@ -3,15 +3,10 @@ from .ConfigLoaderBase import ConfigLoaderBase
 from dataclasses import dataclass
 from pathlib import Path
 import os
-
-CONFIG_PATH = Path(os.environ["RAS_APP_PATH"])/"configs"
+from ...globals import RAS_APP_PATH
+CONFIG_PATH = Path(RAS_APP_PATH)/"configs"
 CONFIG_FILE = CONFIG_PATH/"ras_conf.yaml"
 
-@dataclass
-class RealConfig(ConfigLoaderBase):
-    # real: bool
-    # sim: bool
-    mode: str
 
 @dataclass
 class FTPConfig(ConfigLoaderBase):
@@ -36,7 +31,6 @@ class TransportConfig(ConfigLoaderBase):
 
 @dataclass
 class RasConfig(ConfigLoaderBase):
-    real: RealConfig
     transport: TransportConfig
 
 class RasObject(object):

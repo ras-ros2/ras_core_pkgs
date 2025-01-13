@@ -2,20 +2,21 @@ from ..config.loaders.ras_config import RasObject as RasConfigLoader,FTPConfig
 import os
 from pathlib import Path
 from .TransportLoader import TransportLoader
+from ras_common.globals import RAS_APP_PATH
 
 class TransportFileServer(object):
+    serve_path = Path(RAS_APP_PATH)/"serve"
     def __init__(self, name: str) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
-        serve_path = Path(os.environ["RAS_APP_PATH"] + "/serve")
-        serve_path.mkdir(parents=True, exist_ok=True)
+        self.serve_path.mkdir(parents=True, exist_ok=True)
         self.name = name
         file_server = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).file_server
         ftp_conf = RasConfigLoader.ras.transport.ftp
         if not hasattr(ftp_conf, self.name):
             raise Exception(f"FTP configuration for {self.name} not found")
         ftp_conf : FTPConfig = getattr(ftp_conf, self.name)
-        self.ftpserver = file_server(serve_path,ftp_conf.ip,ftp_conf.port)
+        self.ftpserver = file_server(self.serve_path,ftp_conf.ip,ftp_conf.port)
 
     def serve(self):
         self.ftpserver.serve()

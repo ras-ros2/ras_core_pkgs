@@ -27,7 +27,7 @@ from enum import Enum
 
 
 from .package_manager import get_asset_package_prefix,AssetType,get_asset_package_name
-
+from ras_common.globals import RAS_WORKSPACE_PATH
 class SimResourceType(Enum):
     NONE = AssetType.NONE
     LAB = AssetType.LAB
@@ -41,7 +41,7 @@ class SimResourceManager(object):
             return
         cls._initialized = True
         cls._resource_providers : Dict[SimResourceType,Dict[str,set]] = dict()
-        install_path = Path(os.environ['RAS_WORKSPACE_PATH'])/'install'
+        install_path = Path(RAS_WORKSPACE_PATH)/'install'
         assert install_path.is_dir()
         for type_name,resource_type in SimResourceType._member_map_.items():
             if type_name == "NONE":

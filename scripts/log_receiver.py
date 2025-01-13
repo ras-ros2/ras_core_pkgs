@@ -31,6 +31,7 @@ from builtin_interfaces.msg import Duration
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+from ras_common.globals import RAS_APP_PATH
 from geometry_msgs.msg import Pose, Point, Quaternion
 import os
 import json
@@ -38,15 +39,12 @@ import yaml
 from pathlib import Path
 import time
 
+
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
         super().__init__('trajectory_logger')
 
         my_callback_group = ReentrantCallbackGroup()
-
-        self.ws_path = os.environ["RAS_WORKSPACE_PATH"]
-
-
         self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
         self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
         self.fallback_client = self.create_client(LoadExp, "/fallback_info", callback_group=my_callback_group)
@@ -75,8 +73,7 @@ class TrajectoryLogger(LifecycleNode):
 
         try:
             log_data = json.loads(self.payload)
-            app_path = os.environ["RAS_WORKSPACE_PATH"]
-            log_path = Path(app_path) / "logs" / "log.txt"
+            log_path = Path(RAS_APP_PATH) / "logs" / "log.txt"
             log_path.parent.mkdir(parents=True, exist_ok=True)
             with log_path.open("a") as file:
                 yaml.dump(log_data, file)

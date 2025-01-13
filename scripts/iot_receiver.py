@@ -37,7 +37,8 @@ from ras_interfaces.srv import SetPath
 from rclpy.executors import MultiThreadedExecutor
 from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
-
+from ras_common.globals import RAS_APP_PATH
+from ras_common.transport.TransportWrapper import TransportFileServer
 import json
 import yaml
 import time
@@ -82,7 +83,7 @@ class TrajectoryLogger(LifecycleNode):
 
         print("Downloading the file using wget...")
         result = subprocess.run(
-            ["cp", f"{os.environ['RAS_APP_PATH']}/serve/xml_directory.zip", f"{extract_path}"],
+            ["cp", f"{TransportFileServer.serve_path}/xml_directory.zip", f"{extract_path}"],
             check=True,
             capture_output=True,
             text=True,

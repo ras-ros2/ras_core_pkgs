@@ -35,6 +35,7 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 import os
 import json
 import yaml
+from pathlib import Path
 import time
 
 class TrajectoryLogger(LifecycleNode):
@@ -74,7 +75,10 @@ class TrajectoryLogger(LifecycleNode):
 
         try:
             log_data = json.loads(self.payload)
-            with open("/ras_sim_lab/logs/log.txt", 'a') as file:
+            app_path = os.environ["RAS_WORKSPACE_PATH"]
+            log_path = Path(app_path) / "logs" / "log.txt"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a") as file:
                 yaml.dump(log_data, file)
 
             if self.aruco_sync_flag == True:

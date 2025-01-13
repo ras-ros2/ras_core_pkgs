@@ -36,6 +36,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import SetPath
 from rclpy.executors import MultiThreadedExecutor
 from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+from ras_common.package.utils import get_cmake_python_pkg_source_dir
 
 import json
 import yaml
@@ -72,7 +73,12 @@ class TrajectoryLogger(LifecycleNode):
         self.payload =  message.decode("utf-8")
         self.get_logger().info("Received Message")
 
-        extract_path = os.path.join(os.environ['RAS_WORKSPACE_PATH'], "src", "ras_aws_transport", "real_bot_zip")
+        pkg_path = get_cmake_python_pkg_source_dir("ras_aws_transport")
+        if not pkg_path:
+            self.get_logger().error("Unable to find the package path")
+            return
+        
+        extract_path = os.path.join(str(pkg_path), "real_bot_zip")
 
         print("Downloading the file using wget...")
         result = subprocess.run(
@@ -82,8 +88,6 @@ class TrajectoryLogger(LifecycleNode):
             text=True,
         )
         print("Download completed")
-
-        extract_path = os.path.join(os.environ['RAS_WORKSPACE_PATH'], "src", "ras_aws_transport", "real_bot_zip")
 
         result2 = subprocess.run(
             ["unzip", "-o", f"{extract_path}/xml_directory.zip", "-d", f"{extract_path}"],

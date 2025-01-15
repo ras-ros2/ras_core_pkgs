@@ -15,8 +15,8 @@ class FTPConfig(ConfigLoaderBase):
 
 @dataclass
 class FTPsConfig(ConfigLoaderBase):
-    sim : FTPConfig
-    real : FTPConfig
+    server : FTPConfig
+    robot : FTPConfig
 
 @dataclass
 class MQTTConfig(ConfigLoaderBase):

@@ -4,7 +4,7 @@ from ras_transport.interfaces.TransportWrapper import TransportFileServer
 import rclpy
 def main(args=None):
     rclpy.init(args=args)
-    ftp_server = TransportFileServer("real")
+    ftp_server = TransportFileServer("robot")
     
     try:
         ftp_server.ftpserver.connect()

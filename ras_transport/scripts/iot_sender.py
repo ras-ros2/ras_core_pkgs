@@ -57,7 +57,7 @@ class LinkHandler(Node):
         self.declare_parameter("path_for_config", "")
         self.declare_parameter("discover_endpoints", False)
         # self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
-        self.file_client = TransportFileClient("real")
+        self.file_client = TransportFileClient("robot")
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
         self.mqtt_pub = TransportMQTTPublisher("test/topic")

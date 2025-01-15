@@ -11,8 +11,9 @@ class TransportFileServer(object):
         RasConfigLoader.init()
         self.serve_path.mkdir(parents=True, exist_ok=True)
         self.name = name
-        file_server = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).file_server
-        ftp_conf = RasConfigLoader.ras.transport.ftp
+        transport_conf = RasConfigLoader.ras.transport
+        file_server = TransportLoader.get_transport(transport_conf.implementation).file_server
+        ftp_conf = transport_conf.ftp
         if not hasattr(ftp_conf, self.name):
             raise Exception(f"FTP configuration for {self.name} not found")
         ftp_conf : FTPConfig = getattr(ftp_conf, self.name)

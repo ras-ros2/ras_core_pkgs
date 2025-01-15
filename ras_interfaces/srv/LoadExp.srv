@@ -1,0 +1,10 @@
+string exepriment_id 
+string instruction_no
+string picked_object
+
+---
+
+string lab_file_path
+string exp_file_path
+bool success
+string err_msg

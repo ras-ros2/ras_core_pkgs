@@ -1,0 +1,6 @@
+string traj_status
+int32 current_traj
+
+---
+
+bool success

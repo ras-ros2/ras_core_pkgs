@@ -1,0 +1,6 @@
+string object_name
+geometry_msgs/Pose object_pose
+
+---
+
+bool response

@@ -1,0 +1,5 @@
+bool gripper_status
+
+---
+
+bool success

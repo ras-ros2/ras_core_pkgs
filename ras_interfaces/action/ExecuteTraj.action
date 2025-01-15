@@ -1,0 +1,9 @@
+trajectory_msgs/JointTrajectoryPoint[] trajectory
+int32 index
+---
+
+bool success
+
+---
+
+string object

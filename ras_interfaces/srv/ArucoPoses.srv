@@ -1,0 +1,6 @@
+int32[] marker_id_list
+geometry_msgs/Pose[] poses
+
+---
+
+bool response

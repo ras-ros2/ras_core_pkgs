@@ -1,0 +1,7 @@
+string traj_status
+bool gripper_status
+int32 current_traj
+
+---
+
+bool success

@@ -1,0 +1,4 @@
+string object_id
+string action
+string object_mesh_path
+geometry_msgs/Pose object_pose

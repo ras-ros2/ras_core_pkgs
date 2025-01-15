@@ -1,0 +1,6 @@
+string unique_id
+string topic_name
+
+---
+
+bool success

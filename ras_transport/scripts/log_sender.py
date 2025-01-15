@@ -32,7 +32,7 @@ from rclpy.lifecycle import LifecycleNode
 from sensor_msgs.msg import JointState
 from ras_interfaces.srv import StatusLog
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
-from ras_common.transport.TransportWrapper import TransportMQTTPublisher
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
 from aruco_interfaces.msg import ArucoMarkers
 from rclpy_message_converter import json_message_converter
 

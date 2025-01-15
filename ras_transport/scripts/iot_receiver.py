@@ -35,15 +35,16 @@ from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import SetPath
 from rclpy.executors import MultiThreadedExecutor
-from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_APP_PATH
-from ras_common.transport.TransportWrapper import TransportFileServer
+from ras_transport.interfaces.TransportWrapper import TransportFileServer
 import json
 import yaml
 import time
 from ras_bt_framework.managers.BaTMan import BaTMan
 from ras_interfaces.msg import BTNodeStatus
+from pathlib import Path
 
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
@@ -74,12 +75,13 @@ class TrajectoryLogger(LifecycleNode):
         self.payload =  message.decode("utf-8")
         self.get_logger().info("Received Message")
 
-        pkg_path = get_cmake_python_pkg_source_dir("ras_aws_transport")
+        pkg_path = get_cmake_python_pkg_source_dir("ras_transport")
         if not pkg_path:
             self.get_logger().error("Unable to find the package path")
             return
         
         extract_path = os.path.join(str(pkg_path), "real_bot_zip")
+        Path(extract_path).mkdir(parents=True, exist_ok=True)
 
         print("Downloading the file using wget...")
         result = subprocess.run(

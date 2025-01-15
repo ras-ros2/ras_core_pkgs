@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from ras_common.transport.TransportWrapper import run_mqtt_broker
+from ras_transport.interfaces.TransportWrapper import run_mqtt_broker
 import subprocess
 def main():
     try:

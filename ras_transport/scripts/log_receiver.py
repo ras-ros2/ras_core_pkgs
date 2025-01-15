@@ -30,7 +30,7 @@ from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
-from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber
 from ras_common.globals import RAS_APP_PATH
 from geometry_msgs.msg import Pose, Point, Quaternion
 import os

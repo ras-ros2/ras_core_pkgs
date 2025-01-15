@@ -39,7 +39,8 @@ import json
 # from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-from ras_common.transport.TransportWrapper import TransportMQTTPublisher
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
+from ras_transport.interfaces.TransportWrapper import TransportFileClient
 import os
 import zipfile
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
@@ -55,7 +56,8 @@ class LinkHandler(Node):
 
         self.declare_parameter("path_for_config", "")
         self.declare_parameter("discover_endpoints", False)
-        self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
+        # self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
+        self.file_client = TransportFileClient("real")
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
         self.mqtt_pub = TransportMQTTPublisher("test/topic")
@@ -63,6 +65,7 @@ class LinkHandler(Node):
         
     def connect_to_aws(self):
         self.mqtt_pub.connect_with_retries()
+        self.file_client.connect_with_retries()
 
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
@@ -78,14 +81,9 @@ class LinkHandler(Node):
     def send_zip_file_path(self, zip_file_path):
         request = SetPath.Request()
         request.path = zip_file_path
-        
-        self.client.wait_for_service()
-        future = self.client.call_async(request)
 
-        rclpy.spin_until_future_complete(self, future)
-        response = future.result()
-        print(response.link)
-        self.publish_with_retry(response.link)
+        self.file_client.upload(zip_file_path, "xml_directory.zip")
+        self.publish_with_retry("xml_directory.zip")
 
     def zip_xml_directory(self):
     # Get the directory of the current script

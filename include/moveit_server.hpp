@@ -46,6 +46,7 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <geometric_shapes/shapes.h>
 #include <geometric_shapes/shape_operations.h>
+#include <ras_interfaces/srv/joint_req.hpp>
 
 using moveit::planning_interface::MoveGroupInterface;
 
@@ -54,11 +55,13 @@ class MoveitServer : public rclcpp::Node, public std::enable_shared_from_this<Mo
 public:
     MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node);
     void move_to_pose_callback(const std::shared_ptr<ras_interfaces::srv::PoseReq::Request> request, std::shared_ptr<ras_interfaces::srv::PoseReq::Response> response);
+    void move_to_joint_callback(const std::shared_ptr<ras_interfaces::srv::JointReq::Request> request, std::shared_ptr<ras_interfaces::srv::JointReq::Response> response);
     void rotate_effector_callback(const std::shared_ptr<ras_interfaces::srv::RotateEffector::Request> request, std::shared_ptr<ras_interfaces::srv::RotateEffector::Response> response);
     void joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
     void sync_callback(const std::shared_ptr<ras_interfaces::srv::JointSat::Request> request,std::shared_ptr<ras_interfaces::srv::JointSat::Response> response);
     void set_constraints(const geometry_msgs::msg::Pose::_orientation_type& quat);
     bool Execute(geometry_msgs::msg::Pose target_pose);
+    bool Execute(sensor_msgs::msg::JointState target_joints);
     // void trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
     //   std::shared_ptr<ras_interfaces::srv::ActionTraj::Response> response);
     void AddScenePlane();
@@ -71,6 +74,7 @@ private:
     moveit::planning_interface::MoveGroupInterface::Plan my_plan_arm;
 
     rclcpp::Service<ras_interfaces::srv::PoseReq>::SharedPtr move_to_pose_srv_;
+    rclcpp::Service<ras_interfaces::srv::JointReq>::SharedPtr move_to_joint_srv_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr trajectory_pub;
     rclcpp::Service<ras_interfaces::srv::RotateEffector>::SharedPtr rotate_effector_srv_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;

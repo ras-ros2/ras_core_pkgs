@@ -1,4 +1,4 @@
-from ..config.loaders.ras_config import RasObject as RasConfigLoader,FTPConfig
+from ras_common.config.loaders.ras_config import RasObject as RasConfigLoader,FTPConfig
 import os
 from pathlib import Path
 from .TransportLoader import TransportLoader

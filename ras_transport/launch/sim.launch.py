@@ -5,8 +5,8 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='ras_transport',
-            executable='ras_aws_transport_node',
-            name='ras_aws_transport_node',
+            executable='ras_transport_node',
+            name='ras_transport_node',
             output='screen'
         ),
         Node(

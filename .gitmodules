@@ -10,3 +10,6 @@
 [submodule "ras_aws_transport"]
 	path = ras_aws_transport
 	url = git@github.com:ras-ros2/ras_aws_transport.git
+[submodule "ras_moveit"]
+	path = ras_moveit
+	url = git@github.com:ras-ros2/ras_moveit.git

@@ -1,15 +1,6 @@
 [submodule "ras_resource_lib"]
 	path = ras_resource_lib
 	url = git@github.com:ras-ros2/ras_resource_lib.git
-[submodule "ras_common"]
-	path = ras_common
-	url = git@github.com:ras-ros2/ras_common.git
-[submodule "ras_interfaces"]
-	path = ras_interfaces
-	url = git@github.com:ras-ros2/ras_interfaces.git
 [submodule "ras_aws_transport"]
 	path = ras_aws_transport
 	url = git@github.com:ras-ros2/ras_aws_transport.git
-[submodule "ras_moveit"]
-	path = ras_moveit
-	url = git@github.com:ras-ros2/ras_moveit.git

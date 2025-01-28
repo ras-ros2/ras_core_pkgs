@@ -20,7 +20,7 @@
  * Email: info@opensciencestack.org
 */
 
-#include "moveit_server.hpp"
+#include "../include/moveit_server.hpp"
 
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("Moveit Server Init");
 
@@ -43,6 +43,10 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
         move_to_pose_srv_ = this->create_service<ras_interfaces::srv::PoseReq>(
         "/create_traj",
         std::bind(&MoveitServer::move_to_pose_callback, this, std::placeholders::_1, std::placeholders::_2));
+
+        move_to_joint_srv_ = this->create_service<ras_interfaces::srv::JointReq>(
+        "/move_to_joint_states",
+        std::bind(&MoveitServer::move_to_joint_callback, this, std::placeholders::_1, std::placeholders::_2));
 
         rotate_effector_srv_ = this->create_service<ras_interfaces::srv::RotateEffector>(
         "/rotate_effector",
@@ -109,6 +113,71 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     goal_constraints.orientation_constraints.push_back(ori_constraint);
 
     move_group_arm->setPathConstraints(goal_constraints);
+  }
+
+
+  bool MoveitServer::Execute(sensor_msgs::msg::JointState target_joints)
+  {
+    RCLCPP_INFO(this->get_logger(),"function call");
+
+    trajectory_msgs::msg::JointTrajectory trajectory_msg;
+
+    // move_group_arm->clearPathConstraints();
+    RCLCPP_INFO(this->get_logger(),"clear constraints");
+
+    move_group_arm->setWorkspace(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0);
+    
+    move_group_arm->setPlannerId("RRTConnectkConfigDefault");
+
+    move_group_arm->setNumPlanningAttempts(5);
+    move_group_arm->setPlanningTime(1);
+    move_group_arm->setGoalTolerance(0.005);
+    move_group_arm->setGoalOrientationTolerance(0.005);
+    move_group_arm->setMaxVelocityScalingFactor(0.2);
+    move_group_arm->setMaxAccelerationScalingFactor(0.4);
+    RCLCPP_INFO(this->get_logger(),"beforeconstraints");
+
+
+    RCLCPP_INFO(this->get_logger(),"after constraints");
+    move_group_arm->setJointValueTarget(target_joints);
+
+    RCLCPP_INFO(this->get_logger(),"after target pose");
+
+    int count = 15;
+    for (int i = 0; i < count; i++)
+    {
+        if (i < count-2)
+        {
+        moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+        bool success = (move_group_arm->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+        RCLCPP_INFO(this->get_logger(),"after target plan");
+        trajectory_msg = my_plan.trajectory_.joint_trajectory;
+        if (success)
+        {
+        move_group_arm->execute(my_plan);
+        trajectory_pub->publish(trajectory_msg);
+        return 1;
+        }
+        }
+        else
+        {
+        move_group_arm->clearPathConstraints();
+        RCLCPP_INFO(this->get_logger(), "Clearning Constraints");
+        moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
+        bool success2 = (move_group_arm->plan(my_plan2) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+        trajectory_msg = my_plan2.trajectory_.joint_trajectory;
+        if (success2)
+        {
+        move_group_arm->execute(my_plan2);
+        trajectory_pub->publish(trajectory_msg);
+        return 1;
+        }
+        else
+        {
+          return 0;
+        }
+        }   
+    }
   }
 
   bool MoveitServer::Execute(geometry_msgs::msg::Pose target_pose) {
@@ -193,6 +262,32 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     );
 
     bool status = Execute(config_pose);
+    
+    response->success = status;
+  }
+
+  void MoveitServer::move_to_joint_callback(
+      const std::shared_ptr<ras_interfaces::srv::JointReq::Request> request,
+      std::shared_ptr<ras_interfaces::srv::JointReq::Response> response) 
+  {
+    RCLCPP_WARN(this->get_logger(), "Received Joint request...");
+
+    sensor_msgs::msg::JointState config_joints;
+    config_joints = request->joints;
+
+
+    RCLCPP_INFO(this->get_logger(),
+        "Received joints:\n"
+        "Joint1: %f\n"
+        "Joint2: %f\n"
+        "Joint3: %f\n"
+        "Joint4: %f\n"
+        "Joint5: %f\n"
+        "Joint6: %f\n",
+        config_joints.position[0], config_joints.position[1], config_joints.position[2], config_joints.position[3], config_joints.position[4], config_joints.position[5]
+    );
+
+    bool status = Execute(config_joints);
     
     response->success = status;
   }

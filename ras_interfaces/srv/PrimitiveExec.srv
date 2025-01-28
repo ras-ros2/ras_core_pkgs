@@ -1,0 +1,14 @@
+uint8 EXEC_ABORT = 0
+uint8 EXEC_NEXT_ONE = 1
+uint8 EXEC_UNTIL = 2
+uint8 EXEC_STACK = 3
+uint8 EXEC_ALL = 4
+
+
+uint8 exec_mode
+string[] target_stack
+
+---
+
+string[] current_stack
+BTNodeStatus status

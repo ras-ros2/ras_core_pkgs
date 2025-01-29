@@ -3,6 +3,9 @@ import os
 from pathlib import Path
 from .TransportLoader import TransportLoader
 from ras_common.globals import RAS_APP_PATH
+from threading import Thread
+import queue
+
 
 class TransportFileServer(object):
     serve_path = Path(RAS_APP_PATH)/"serve"
@@ -113,14 +116,20 @@ class TransportMQTTPublisher(object):
         self.disconnect()
 
 class TransportMQTTSubscriber(object):
-    def __init__(self,topic_name,callback) -> None:
+    def __init__(self,topic_name,callback,queue_size=None) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
+
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         subscriber = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).subscriber
+        if not isinstance(queue_size,int):
+            queue_size=0
+        self.cb_queue = queue.Queue(maxsize=queue_size)
         def callback_wrapper(payload):
             print(f"Received message on {topic_name}")
-            callback(payload)
+            t = Thread(target=callback,args=(payload,))
+            self.cb_queue.put(t)
+            # callback(payload)
         self.mqttsubscriber = subscriber(topic_name,mqtt_conf.ip,mqtt_conf.port,callback_wrapper)
     
     def connect(self):
@@ -139,6 +148,14 @@ class TransportMQTTSubscriber(object):
     
     def loop(self):
         self.mqttsubscriber.loop()
+        try:
+            thread : Thread = self.cb_queue.get(timeout=1)
+            thread.start()
+            thread.join(timeout=1)
+            if not thread.is_alive():
+                del thread
+        except queue.Empty:
+            pass
     
     def disconnect(self):
         self.mqttsubscriber.disconnect()

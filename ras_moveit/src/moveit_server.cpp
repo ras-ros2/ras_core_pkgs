@@ -29,8 +29,14 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
         {
 
         this->declare_parameter("move_group_name", "lite6");
+        this->declare_parameter("collision_object_frame", "world");
+        this->declare_parameter("base_frame_id", "link_base");
+        this->declare_parameter("end_effector_frame_id", "link_eef");
 
-        std::string move_group_name = this->get_parameter("move_group_name").as_string();
+        move_group_name = this->get_parameter("move_group_name").as_string();
+        collision_object_frame = this->get_parameter("collision_object_frame").as_string();
+        base_frame_id = this->get_parameter("base_frame_id").as_string();
+        end_effector_frame_id = this->get_parameter("end_effector_frame_id").as_string();
 
         move_group_arm = std::make_shared<moveit::planning_interface::MoveGroupInterface>(
             move_group_node,
@@ -61,13 +67,33 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
         "/sync_arm",
         std::bind(&MoveitServer::sync_callback, this, std::placeholders::_1, std::placeholders::_2)
         );
+
+        execute_traj_srv = this->create_service<ras_interfaces::srv::ActionTraj>(
+            "trajectory_topic",
+            std::bind(&MoveitServer::trajectory_callback, this, std::placeholders::_1, std::placeholders::_2));
+        
         AddScenePlane();
         }
+
+  void MoveitServer::trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
+    std::shared_ptr<ras_interfaces::srv::ActionTraj::Response> response)
+  {
+  RCLCPP_INFO(this->get_logger(), "Received trajectory message");
+
+  moveit_msgs::msg::RobotTrajectory robot_trajectory;
+
+  // Convert JointTrajectory to RobotTrajectory
+  robot_trajectory.joint_trajectory = request->traj;
+
+  bool success = (move_group_arm->execute(robot_trajectory) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+  response->success = 1;
+  }
   
   void MoveitServer::AddScenePlane()
   {
     moveit_msgs::msg::CollisionObject collision_object;
-    collision_object.header.frame_id = "world";
+    collision_object.header.frame_id = collision_object_frame;
     collision_object.id = "ground_plane";
     shape_msgs::msg::SolidPrimitive primitive;
     primitive.type = primitive.BOX;
@@ -99,12 +125,12 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     // Goal constraints - orientation
     moveit_msgs::msg::OrientationConstraint ori_constraint;
     ori_constraint.header.stamp = this->get_clock()->now(); // Set the current time
-    ori_constraint.header.frame_id = "link_base";
+    ori_constraint.header.frame_id = base_frame_id;
     ori_constraint.orientation.x = quat.x;
     ori_constraint.orientation.y = quat.y;
     ori_constraint.orientation.z = quat.z;
     ori_constraint.orientation.w = quat.w;
-    ori_constraint.link_name = "link_eef";
+    ori_constraint.link_name = end_effector_frame_id;
     ori_constraint.absolute_x_axis_tolerance = 0.75;
     ori_constraint.absolute_y_axis_tolerance = 0.75;
     ori_constraint.absolute_z_axis_tolerance = 0.75;

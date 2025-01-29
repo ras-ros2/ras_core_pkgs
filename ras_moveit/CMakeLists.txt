@@ -36,20 +36,8 @@ ament_target_dependencies(moveit_server
   std_srvs
   control_msgs)
 
-add_executable(moveit_real_server src/moveit_real_server.cpp)
-
-ament_target_dependencies(moveit_real_server
-  rclcpp
-  moveit_ros_planning_interface
-  trajectory_msgs
-  ras_interfaces
-  std_srvs
-  control_msgs)
-  
-
 install(TARGETS
   moveit_server
-  moveit_real_server
   DESTINATION lib/${PROJECT_NAME}
 )
 

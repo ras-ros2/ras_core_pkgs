@@ -4,7 +4,7 @@ import importlib
 def get_cmake_python_pkg_source_dir(package_name: str, no_raise: bool = False) -> Path | None:
     try:
         module_type = importlib.import_module(package_name)
-        pkg_path = (Path(module_type.__file__).parent.parent).resolve().absolute()
+        pkg_path = (Path(module_type.__file__)).resolve().absolute().parent.parent
         return pkg_path
     except Exception as e:
         if not no_raise:

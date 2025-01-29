@@ -39,7 +39,7 @@ import json
 # from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher,TransportMQTTSubscriber
 from ras_transport.interfaces.TransportWrapper import TransportFileClient
 import os
 import zipfile

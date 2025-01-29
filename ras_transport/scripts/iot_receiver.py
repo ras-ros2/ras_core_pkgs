@@ -60,7 +60,9 @@ class TrajectoryLogger(LifecycleNode):
 
         self.instruction_flag = True
         self.mqtt_sub = TransportMQTTSubscriber("test/topic", self.custom_callback)
+
         self.batman = BaTMan()
+
         # Connect to AWS IoT
         self.connect_to_aws()
 
@@ -70,6 +72,11 @@ class TrajectoryLogger(LifecycleNode):
         self.payload = ''
     def connect_to_aws(self):
         self.mqtt_sub.connect_with_retries()
+        self.reciever_timer = self.create_timer(0.1, self.timer_callback)
+
+    def timer_callback(self):
+        print("spinning")
+        self.mqtt_sub.loop()
 
     def custom_callback(self, message):
         self.payload =  message.decode("utf-8")
@@ -111,13 +118,12 @@ class TrajectoryLogger(LifecycleNode):
 def main(args=None):
     rclpy.init(args=args)
     receiver = TrajectoryLogger()
-    my_exec = MultiThreadedExecutor(num_threads=2)
+    my_exec = MultiThreadedExecutor(num_threads=8)
     my_exec.add_node(receiver)
     my_exec.add_node(receiver.batman)
     try:
         while rclpy.ok():
             my_exec.spin_once(timeout_sec=0.1)
-            receiver.mqtt_sub.loop()
 
     except KeyboardInterrupt:
         pass

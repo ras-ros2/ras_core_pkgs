@@ -19,7 +19,7 @@ Email: info@opensciencestack.org
 
 import rclpy
 from rclpy.node import Node
-from ras_common.transport.TransportWrapper import TransportMQTTPublisher
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
 from ras_interfaces.srv import ReadBlack
 from enum import Enum
 import time

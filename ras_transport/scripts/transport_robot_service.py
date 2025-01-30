@@ -20,7 +20,7 @@ Email: info@opensciencestack.org
 
 import rclpy
 from rclpy.node import Node
-from ras_common.transport.TransportWrapper import TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber
 from enum import Enum
 
 class TransportCommands(Enum):

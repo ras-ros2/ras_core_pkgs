@@ -13,7 +13,7 @@ def generate_launch_description():
       Node(
         package='ras_moveit',
         # namespace='moveit_server',
-        executable='moveit_real_server',
+        executable='moveit_server',
         name='moveit_server',
         output='screen',
         parameters=[

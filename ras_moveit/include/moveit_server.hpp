@@ -47,6 +47,7 @@
 #include <geometric_shapes/shapes.h>
 #include <geometric_shapes/shape_operations.h>
 #include <ras_interfaces/srv/joint_req.hpp>
+#include <ras_interfaces/srv/action_traj.hpp>
 
 using moveit::planning_interface::MoveGroupInterface;
 
@@ -62,6 +63,8 @@ public:
     void set_constraints(const geometry_msgs::msg::Pose::_orientation_type& quat);
     bool Execute(geometry_msgs::msg::Pose target_pose);
     bool Execute(sensor_msgs::msg::JointState target_joints);
+    void trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
+      std::shared_ptr<ras_interfaces::srv::ActionTraj::Response> response);
     // void trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
     //   std::shared_ptr<ras_interfaces::srv::ActionTraj::Response> response);
     void AddScenePlane();
@@ -79,7 +82,13 @@ private:
     rclcpp::Service<ras_interfaces::srv::RotateEffector>::SharedPtr rotate_effector_srv_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     rclcpp::Service<ras_interfaces::srv::JointSat>::SharedPtr sync_srv;
+    rclcpp::Service<ras_interfaces::srv::ActionTraj>::SharedPtr execute_traj_srv;
+
     std::vector<float> joint_angle;
+    std::string collision_object_frame;
+    std::string base_frame_id;
+    std::string end_effector_frame_id;
+    std::string move_group_name;
 
     bool fallback_flag;
 };

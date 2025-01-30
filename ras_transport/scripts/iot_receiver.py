@@ -35,7 +35,7 @@ from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import SetPath
 from rclpy.executors import MultiThreadedExecutor
-from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher, TransportMQTTSubscriber
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_APP_PATH
 from ras_transport.interfaces.TransportWrapper import TransportFileServer
@@ -60,6 +60,7 @@ class TrajectoryLogger(LifecycleNode):
 
         self.instruction_flag = True
         self.mqtt_sub = TransportMQTTSubscriber("test/topic", self.custom_callback)
+        self.mqtt_pub = TransportMQTTPublisher("bt_response")
 
         self.batman = BaTMan()
 
@@ -72,6 +73,7 @@ class TrajectoryLogger(LifecycleNode):
         self.payload = ''
     def connect_to_aws(self):
         self.mqtt_sub.connect_with_retries()
+        self.mqtt_pub.connect_with_retries()
         self.reciever_timer = self.create_timer(0.1, self.timer_callback)
 
     def timer_callback(self):
@@ -114,6 +116,12 @@ class TrajectoryLogger(LifecycleNode):
         status = self.batman.execute_bt(bt_path)
         if status in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
             self.get_logger().info("Behavior Tree Execution Successful")
+            status = True
+        else:
+            self.get_logger().info("Behavior Tree Execution Failed")
+            status = False
+        payload = json.dumps({"status": status}) 
+        self.mqtt_pub.publish(payload)
 
 def main(args=None):
     rclpy.init(args=args)

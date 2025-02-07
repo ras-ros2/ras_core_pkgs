@@ -5,6 +5,7 @@ from .TransportLoader import TransportLoader
 from ras_common.globals import RAS_APP_PATH
 from threading import Thread
 import queue
+import time
 
 
 class TransportFileServer(object):
@@ -160,6 +161,111 @@ class TransportMQTTSubscriber(object):
     def disconnect(self):
         self.mqttsubscriber.disconnect()
 
+    def __del__(self):
+        self.disconnect()
+
+class TransportServiceServer(object):
+    """
+    Represents a service that can be called over MQTT transport.
+
+    Args:
+        callback (Callable[[bytes], bytes]): A callback function that will be called
+            whenever a request message is received on the service topic. The
+            callback should return a response message.
+    """
+    def __init__(self,topic_name:str,callback,queue_size=None):
+        assert callable(callback)
+        self.callback = callback
+        self.subscriber = TransportMQTTSubscriber("req/"+topic_name,callback=self.srv_callback,queue_size=queue_size)
+        self.resp_pub = TransportMQTTPublisher("resp/"+topic_name)
+    
+    def connect(self):
+        self.subscriber.connect()
+        self.resp_pub.connect()
+        
+    def connect_with_retries(self,delay_sec=5):
+        self.subscriber.connect_with_retries(delay_sec)
+        self.resp_pub.connect_with_retries(delay_sec)
+        
+    def loop(self):
+        self.subscriber.loop()
+        self.resp_pub.loop()
+        
+    def srv_callback(self,payload):
+        resp = self.callback(payload)
+        if isinstance(resp,str):
+            resp = resp.encode("utf-8")
+        elif isinstance(resp,type(None)):
+            resp = "".encode("utf-8")
+        else:
+            raise Exception("Response must be of type bytes or str")
+        self.resp_pub.publish(resp)
+        
+    def disconnect(self):
+        self.subscriber.disconnect()
+        self.resp_pub.disconnect()
+        
+    def __del__(self):
+        self.disconnect()
+        
+class TransportServiceClient(object):
+    """
+    Represents a client that can be called over MQTT transport.
+
+    Args:
+        topic_name: str
+    """
+    def __init__(self, topic_name: str):
+        assert isinstance(topic_name, str)
+        self.req_pub = TransportMQTTPublisher("req/" + topic_name)
+        self.subscriber = TransportMQTTSubscriber("resp/" + topic_name, callback=self.on_response)
+        self.resp_flag : bool = False
+        self.resp = None
+        
+    def connect(self):
+        self.req_pub.connect()
+        self.subscriber.connect()
+        
+    def connect_with_retries(self, delay_sec=5):
+        self.req_pub.connect_with_retries(delay_sec)
+        self.subscriber.connect_with_retries(delay_sec)
+        
+    def call(self, payload: bytes | str):
+        """
+        Default synchronous call.
+
+        Args:
+            payload (bytes | str): The payload to send in the service call.
+            timeout (int, optional): The timeout for the service call in seconds. Defaults to 10.
+        Returns:
+            The response from the service call if successful.
+        """
+        if isinstance(payload, str):
+            payload = payload.encode("utf-8")
+        elif not isinstance(payload, bytes):
+            raise Exception("Payload must be of type bytes or str")
+        
+        self.req_pub.publish(payload)
+        
+        while self.resp is None:
+            self.loop()
+            time.sleep(0.1)
+        
+        resp = self.resp
+        self.resp = None
+        return resp
+            
+    def on_response(self, payload):
+        self.resp = payload
+    
+    def loop(self):
+        self.req_pub.loop()
+        self.subscriber.loop()
+    
+    def disconnect(self):
+        self.subscriber.disconnect()
+        self.req_pub.disconnect()
+    
     def __del__(self):
         self.disconnect()
 

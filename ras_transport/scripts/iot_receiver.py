@@ -38,7 +38,7 @@ from rclpy.executors import MultiThreadedExecutor
 from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher, TransportMQTTSubscriber
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_APP_PATH
-from ras_transport.interfaces.TransportWrapper import TransportFileServer
+from ras_transport.interfaces.TransportWrapper import TransportFileServer, TransportServiceServer
 import json
 import yaml
 import time
@@ -51,34 +51,26 @@ class TrajectoryLogger(LifecycleNode):
         super().__init__('trajectory_logger')
         my_callback_group = ReentrantCallbackGroup()
 
-        # self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
-        # self.service_sync = self.create_client(JointSat, "sync_arm", callback_group=my_callback_group)
-        # self.fallback_client = self.create_client(LoadExp, "/fallback_info", callback_group=my_callback_group)
         self.path_client = self.create_client(SetPath, '/load_path')
 
         self.instruction_msg = []
 
         self.instruction_flag = True
-        self.mqtt_sub = TransportMQTTSubscriber("test/topic", self.custom_callback)
-        self.mqtt_pub = TransportMQTTPublisher("bt_response")
+        self.remote_bt_server = TransportServiceServer("remote_bt", self.custom_callback)
 
         self.batman = BaTMan()
 
         # Connect to AWS IoT
         self.connect_to_aws()
 
-        # Subscribe to the topic
-        # self.mqtt_client.subscribe(cert_data["topic"], 1, self.custom_callback)
-        # self.get_logger().info(f"Subscribed to topic: {cert_data['topic']}")
         self.payload = ''
+
     def connect_to_aws(self):
-        self.mqtt_sub.connect_with_retries()
-        self.mqtt_pub.connect_with_retries()
+        self.remote_bt_server.connect_with_retries()
         self.reciever_timer = self.create_timer(0.1, self.timer_callback)
 
     def timer_callback(self):
-        print("spinning")
-        self.mqtt_sub.loop()
+        self.remote_bt_server.loop()
 
     def custom_callback(self, message):
         self.payload =  message.decode("utf-8")
@@ -87,7 +79,9 @@ class TrajectoryLogger(LifecycleNode):
         pkg_path = get_cmake_python_pkg_source_dir("ras_transport")
         if not pkg_path:
             self.get_logger().error("Unable to find the package path")
-            return
+            status = False
+            payload = json.dumps({"status": status}) 
+            return  payload
         
         extract_path = os.path.join(str(pkg_path), "real_bot_zip")
         Path(extract_path).mkdir(parents=True, exist_ok=True)
@@ -121,7 +115,7 @@ class TrajectoryLogger(LifecycleNode):
             self.get_logger().info("Behavior Tree Execution Failed")
             status = False
         payload = json.dumps({"status": status}) 
-        self.mqtt_pub.publish(payload)
+        return payload
 
 def main(args=None):
     rclpy.init(args=args)
@@ -137,7 +131,7 @@ def main(args=None):
         pass
     finally:
         # Cleanup and disconnect
-        receiver.mqtt_sub.mqttsubscriber.disconnect()
+        receiver.remote_bt_server.disconnect()
         receiver.get_logger().info("Disconnected from AWS IoT")
         receiver.destroy_node()
         # rclpy.shutdown()

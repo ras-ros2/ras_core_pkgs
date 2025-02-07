@@ -55,6 +55,8 @@ class ArmLogger(LifecycleNode):
         self.joint_status = JointState()
         self.trajlog = {}
 
+        self.joint_list = []
+
     def connect_to_aws(self):
         self.mqtt_pub.connect_with_retries()
     
@@ -80,7 +82,7 @@ class ArmLogger(LifecycleNode):
         return next_filename
     
     def joint_callback(self, msg):
-        self.joint_list = []
+        self.joint_list.clear()
         count = 1
         for i in range(0, len(msg.name)):
             for j in range(0, len(msg.name)):

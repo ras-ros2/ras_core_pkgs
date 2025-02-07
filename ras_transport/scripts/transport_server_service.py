@@ -19,10 +19,11 @@ Email: info@opensciencestack.org
 
 import rclpy
 from rclpy.node import Node
-from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher, TransportServiceClient
 from ras_interfaces.srv import ReadBlack
 import time
 from enum import Enum
+import json
 
 class TransportCommands(Enum):
     HOME = "home"
@@ -32,29 +33,24 @@ class TransportServerService(Node):
     def __init__(self):
         super().__init__('transport_server_service')
         self.service_server = self.create_service(ReadBlack, '/server_transport', self.service_server_cb)
-
-        self.mqtt_pub = TransportMQTTPublisher("server_transport")
+        self.server_transport_client = TransportServiceClient("server_transport")
         self.connect_aws()
 
     def connect_aws(self):
-        self.mqtt_pub.connect_with_retries()
+        self.server_transport_client.connect_with_retries()
 
     def service_server_cb(self, request: ReadBlack.Request, response: ReadBlack.Response):
         if request.blackboard == TransportCommands.HOME.value:
-            self.publish_with_retry(TransportCommands.HOME.value)
-            response.success = True
+            req = TransportCommands.HOME.value
         elif request.blackboard == TransportCommands.SYNC.value:
-            self.publish_with_retry(TransportCommands.SYNC.value)
-            response.success = True
+            req = TransportCommands.SYNC.value
         else:
             response.success = False
+            return response
+        res = self.server_transport_client.call(req)
+        payload = json.loads(res)
+        response.success = payload["success"]
         return response
-
-    def publish_with_retry(self, payload):
-        self.get_logger().info("Publishing to MQTT")
-        self.mqtt_pub.publish(payload)
-
-        time.sleep(0.25)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -62,12 +58,12 @@ def main(args=None):
     try:
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
-            node.mqtt_pub.loop()
+            node.server_transport_client.loop()
     except KeyboardInterrupt:
         pass
     finally:
         # Cleanup and disconnect
-        node.mqtt_pub.disconnect()
+        node.server_transport_client.disconnect()
         node.destroy_node()
         rclpy.shutdown()
 

@@ -39,7 +39,7 @@ import json
 # from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher,TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher,TransportMQTTSubscriber, TransportServiceClient
 from ras_transport.interfaces.TransportWrapper import TransportFileClient
 import os
 import zipfile
@@ -56,51 +56,40 @@ class LinkHandler(Node):
 
         self.declare_parameter("path_for_config", "")
         self.declare_parameter("discover_endpoints", False)
-        # self.client = self.create_client(SetPath, "/send_file", callback_group=my_callback_group)
         self.file_client = TransportFileClient("robot")
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
         self.mqtt_sub_response_flag = False
         self.mqtt_sub_msg = None
-        self.mqtt_pub = TransportMQTTPublisher("test/topic")
-        self.mqtt_sub = TransportMQTTSubscriber("bt_response", self.mqtt_sub_cb)
+        self.remote_bt_client = TransportServiceClient("remote_bt")
         self.connect_to_aws()
         
     def connect_to_aws(self):
-        self.mqtt_pub.connect_with_retries()
-        self.mqtt_sub.connect_with_retries()
+        self.remote_bt_client.connect_with_retries()
         self.file_client.connect_with_retries()
-
-    def mqtt_sub_cb(self, msg):
-        self.mqtt_sub_response_flag = True
-        self.mqtt_sub_msg =  msg.decode("utf-8") 
 
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
         zip_file_path = self.zip_xml_directory()
         pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")  
         path = os.path.join(str(pkg_path), "xml", "xml_directory.zip")
-        self.send_zip_file_path(path)
-        while not self.mqtt_sub_response_flag:
-            time.sleep(0.1)
-            self.mqtt_sub.loop()
-        
+        resp: str = self.send_zip_file_path(path)
         result = ExecuteExp.Result()
-        data = json.loads(self.mqtt_sub_msg)
+        data = json.loads(resp)
         status = data.get("status")
         result.success = status
         goal_handle.succeed()
         return result
         
-    def send_zip_file_path(self, zip_file_path):
+    def send_zip_file_path(self, zip_file_path) -> str:
         request = SetPath.Request()
         request.path = zip_file_path
 
         self.file_client.upload(zip_file_path, "xml_directory.zip")
-        self.publish_with_retry("xml_directory.zip")
+        return self.remote_bt_client.call("xml_directory.zip")
 
     def zip_xml_directory(self):
-    # Get the directory of the current script
+        # Get the directory of the current script
         script_dir = os.path.dirname(os.path.abspath(__file__))
 
         pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
@@ -127,24 +116,13 @@ class LinkHandler(Node):
         
             return zip_file_path
 
-    def publish_with_retry(self, payload, delay=2):
-        self.get_logger().info("Publishing to AWS IoT")
-        self.mqtt_pub.publish(payload)
-        # self.connection_helper.mqtt_conn.publish(
-        #     topic="test/topic",
-        #     payload=payload,
-        #     qos=mqtt.QoS.AT_LEAST_ONCE
-        # )
-
-        time.sleep(0.25)
-
 def main(args=None):
     rclpy.init(args=args)
     node = LinkHandler()
     try:
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
-            node.mqtt_pub.loop()
+            node.remote_bt_client.loop()
 
     except KeyboardInterrupt:
         pass

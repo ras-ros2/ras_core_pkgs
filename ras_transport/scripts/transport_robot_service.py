@@ -19,12 +19,13 @@ Email: info@opensciencestack.org
 
 import rclpy
 from rclpy.node import Node
-from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber, TransportServiceServer
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_interfaces.srv import JointReq
 from typing import Dict
 from enum import Enum
 from std_srvs.srv import SetBool
+import json
 
 class TransportCommands(Enum):
     HOME = "home"
@@ -33,18 +34,14 @@ class TransportCommands(Enum):
 class TransportRobotService(Node):
     def __init__(self):
         super().__init__('transport_robot_service')
-        self.mqtt_sub = TransportMQTTSubscriber("server_transport", self.custom_callback)
+        self.server_transport_server = TransportServiceServer("server_transport", self.execute_request)
         self.connect_aws()
 
     def connect_aws(self):
-        self.mqtt_sub.connect_with_retries()
+        self.server_transport_server.connect_with_retries()
 
-    def custom_callback(self, message):
-        payload =  message.decode("utf-8")
-        self.get_logger().info(f"Received message: {payload}")
-        self.execute_request(payload)
-
-    def execute_request(self, payload):
+    def execute_request(self, message):
+        payload = message.decode("utf-8")
         if payload == TransportCommands.HOME.value:
             self.get_logger().info("Executing Home command")
             req : JointReq.Request = JointReq.Request()
@@ -63,6 +60,7 @@ class TransportRobotService(Node):
                 response: JointReq.Response = future.result()
                 if response.success:
                     self.get_logger().info("Home position reached successfully")
+                    self.execute_request(TransportCommands.SYNC.value.encode("utf-8"))
                 else:
                     self.get_logger().info("Home position doesn't reached")
             else:
@@ -87,18 +85,23 @@ class TransportRobotService(Node):
         else:
             self.get_logger().info("Invalid command")
 
+        payload = {
+            "success": True
+        }
+        return json.dumps(payload)
+
 def main(args=None):
     rclpy.init(args=args)
     node = TransportRobotService()
     try:
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
-            node.mqtt_sub.loop()
+            node.server_transport_server.loop()
     except KeyboardInterrupt:
         pass
     finally:
         # Cleanup and disconnect
-        node.mqtt_sub.mqttsubscriber.disconnect()
+        node.server_transport_server.disconnect()
         node.destroy_node()
         rclpy.shutdown()
 

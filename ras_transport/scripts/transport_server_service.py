@@ -21,8 +21,8 @@ import rclpy
 from rclpy.node import Node
 from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
 from ras_interfaces.srv import ReadBlack
-from enum import Enum
 import time
+from enum import Enum
 
 class TransportCommands(Enum):
     HOME = "home"

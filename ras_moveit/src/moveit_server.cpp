@@ -382,23 +382,29 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     }
 
     move_group_arm->setJointValueTarget(joint_values);
-    if(fallback_flag == false)
-    {
     move_group_arm->setMaxVelocityScalingFactor(0.7);
     move_group_arm->setMaxAccelerationScalingFactor(0.7);
     moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-    bool success = (move_group_arm->plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS);
-    std::cout<<"sync"<<std::endl;
-    move_group_arm->execute(my_plan);
-
-    response->successq = 1;
-
+    bool result = (move_group_arm->plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS);
+    if (result)
+    {
+      result = (move_group_arm->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+      if (result)
+      {
+        RCLCPP_INFO(this->get_logger(), "Trajectory executed successfully");
+        response->successq = true;
+      }
+      else
+      {
+        RCLCPP_ERROR(this->get_logger(), "Trajectory not executed");
+        response->successq = false;
+      }
     }
     else
     {
-      response->successq = 1;
+      RCLCPP_WARN(this->get_logger(), "Planning for trajectory failed");
+      response->successq = false;
     }
-
   }
 
   void MoveitServer::joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg) // <-- Updated this line

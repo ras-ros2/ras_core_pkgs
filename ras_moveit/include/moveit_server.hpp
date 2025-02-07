@@ -89,8 +89,6 @@ private:
     std::string base_frame_id;
     std::string end_effector_frame_id;
     std::string move_group_name;
-
-    bool fallback_flag;
 };
 
 #endif

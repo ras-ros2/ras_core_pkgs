@@ -60,12 +60,20 @@ class LinkHandler(Node):
         self.file_client = TransportFileClient("robot")
         self.send_client = ActionServer(self, ExecuteExp, "/execute_exp", self.send_callback, callback_group=my_callback_group)
 
+        self.mqtt_sub_response_flag = False
+        self.mqtt_sub_msg = None
         self.mqtt_pub = TransportMQTTPublisher("test/topic")
+        self.mqtt_sub = TransportMQTTSubscriber("bt_response", self.mqtt_sub_cb)
         self.connect_to_aws()
         
     def connect_to_aws(self):
         self.mqtt_pub.connect_with_retries()
+        self.mqtt_sub.connect_with_retries()
         self.file_client.connect_with_retries()
+
+    def mqtt_sub_cb(self, msg):
+        self.mqtt_sub_response_flag = True
+        self.mqtt_sub_msg =  msg.decode("utf-8") 
 
     def send_callback(self, goal_handle):
         self.get_logger().info("Starting Real Arm.....")
@@ -73,8 +81,14 @@ class LinkHandler(Node):
         pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")  
         path = os.path.join(str(pkg_path), "xml", "xml_directory.zip")
         self.send_zip_file_path(path)
+        while not self.mqtt_sub_response_flag:
+            time.sleep(0.1)
+            self.mqtt_sub.loop()
+        
         result = ExecuteExp.Result()
-        result.success = True
+        data = json.loads(self.mqtt_sub_msg)
+        status = data.get("status")
+        result.success = status
         goal_handle.succeed()
         return result
         

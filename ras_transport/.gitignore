@@ -1,5 +1,5 @@
 /real_bot_zip/
-/__pycache__/
+__pycache__/
 /scripts/log.txt
 aws_cert/*
 !aws_cert/.keep

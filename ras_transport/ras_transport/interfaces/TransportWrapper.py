@@ -5,6 +5,7 @@ from .TransportLoader import TransportLoader
 from ras_common.globals import RAS_APP_PATH
 from threading import Thread
 import queue
+import time
 
 
 class TransportFileServer(object):
@@ -207,10 +208,66 @@ class TransportServiceServer(object):
     def __del__(self):
         self.disconnect()
         
-# class TransportServiceClient(object):
+class TransportServiceClient(object):
+    """
+    Represents a client that can be called over MQTT transport.
+
+    Args:
+        topic_name: str
+    """
+    def __init__(self, topic_name: str):
+        assert isinstance(topic_name, str)
+        self.req_pub = TransportMQTTPublisher("req/" + topic_name)
+        self.subscriber = TransportMQTTSubscriber("resp/" + topic_name, callback=self.on_response)
+        self.resp_flag : bool = False
+        self.resp = None
+        
+    def connect(self):
+        self.req_pub.connect()
+        self.subscriber.connect()
+        
+    def connect_with_retries(self, delay_sec=5):
+        self.req_pub.connect_with_retries(delay_sec)
+        self.subscriber.connect_with_retries(delay_sec)
+        
+    def call(self, payload: bytes | str):
+        """
+        Default synchronous call.
+
+        Args:
+            payload (bytes | str): The payload to send in the service call.
+            timeout (int, optional): The timeout for the service call in seconds. Defaults to 10.
+        Returns:
+            The response from the service call if successful.
+        """
+        if isinstance(payload, str):
+            payload = payload.encode("utf-8")
+        elif not isinstance(payload, bytes):
+            raise Exception("Payload must be of type bytes or str")
+        
+        self.req_pub.publish(payload)
+        
+        while self.resp is None:
+            self.loop()
+            time.sleep(0.1)
+        
+        resp = self.resp
+        self.resp = None
+        return resp
+            
+    def on_response(self, payload):
+        self.resp = payload
     
-        
-        
+    def loop(self):
+        self.req_pub.loop()
+        self.subscriber.loop()
+    
+    def disconnect(self):
+        self.subscriber.disconnect()
+        self.req_pub.disconnect()
+    
+    def __del__(self):
+        self.disconnect()
 
 def run_mqtt_broker():
     TransportLoader.init()

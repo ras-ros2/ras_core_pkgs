@@ -302,16 +302,12 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     config_joints = request->joints;
 
 
-    RCLCPP_INFO(this->get_logger(),
-        "Received joints:\n"
-        "Joint1: %f\n"
-        "Joint2: %f\n"
-        "Joint3: %f\n"
-        "Joint4: %f\n"
-        "Joint5: %f\n"
-        "Joint6: %f\n",
-        config_joints.position[0], config_joints.position[1], config_joints.position[2], config_joints.position[3], config_joints.position[4], config_joints.position[5]
-    );
+    std::ostringstream joint_info;
+    joint_info << "Received joints:\n";
+    for (size_t i = 0; i < config_joints.position.size(); ++i) {
+      joint_info << "Joint" << (i + 1) << ": " << config_joints.position[i] << "\n";
+    }
+    RCLCPP_INFO(this->get_logger(), joint_info.str().c_str());
 
     bool status = Execute(config_joints);
     

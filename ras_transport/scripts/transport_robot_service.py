@@ -19,13 +19,14 @@ Email: info@opensciencestack.org
 
 import rclpy
 from rclpy.node import Node
-from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber, TransportServiceServer
+from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber, TransportServiceServer, TransportServiceClient
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_interfaces.srv import JointReq
 from typing import Dict
 from enum import Enum
 from std_srvs.srv import SetBool
 import json
+import time
 
 class TransportCommands(Enum):
     HOME = "home"
@@ -35,10 +36,36 @@ class TransportRobotService(Node):
     def __init__(self):
         super().__init__('transport_robot_service')
         self.server_transport_server = TransportServiceServer("server_transport", self.execute_request)
+        
+        self.sync_robot_client = TransportServiceClient("sync_robot")
         self.connect_aws()
+        time.sleep(2) # wait for 2 seconds
+        self.first_sync_robot()
+
+    def first_sync_robot(self):
+        payload = {
+            "sync_robot": True
+        }
+        req = json.dumps(payload)
+        res = self.sync_robot_client.call(req)
+        message = json.loads(res)
+        if message["success"]:
+            print("Initial Sync Robot Started ")
+            result = self.execute_request(TransportCommands.SYNC.value.encode("utf-8"))
+            payload = json.loads(result)
+            if (payload["success"]):
+                print("Initialized sync robot successfully")
+            else:
+                print("Initialized sync robot not happend")
+
+        else:
+            print("Initial Sync Robot Not Happend")
 
     def connect_aws(self):
         self.server_transport_server.connect_with_retries()
+        self.sync_robot_client.connect_with_retries()
+    
+    
 
     def execute_request(self, message):
         payload = message.decode("utf-8")
@@ -97,11 +124,13 @@ def main(args=None):
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
             node.server_transport_server.loop()
+            node.sync_robot_client.loop()
     except KeyboardInterrupt:
         pass
     finally:
         # Cleanup and disconnect
         node.server_transport_server.disconnect()
+        node.sync_robot_client.disconnect()
         node.destroy_node()
         rclpy.shutdown()
 

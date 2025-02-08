@@ -64,7 +64,9 @@ class TrajectoryLogger(LifecycleNode):
         self.mqtt_sub.connect_with_retries()
 
     def custom_callback(self, message):
+        print(f"message is {message} and type is {type(message)}")
         self.payload =  message.decode("utf-8")
+        print(f"now type is {type(self.payload)}")
         self.get_logger().info("Received Message")
 
         if not self.payload:
@@ -72,13 +74,14 @@ class TrajectoryLogger(LifecycleNode):
             return
 
         try:
+            print(f"payload: {self.payload}")
             log_data = json.loads(self.payload)
             log_path = Path(RAS_APP_PATH) / "logs" / "log.txt"
             log_path.parent.mkdir(parents=True, exist_ok=True)
             with log_path.open("a") as file:
                 yaml.dump(log_data, file)
 
-            if self.aruco_sync_flag == True:
+            if self.aruco_sync_flag == False:
                 aruco_pose = ArucoPoses.Request()
                 poses_list = json.loads(log_data["aruco_markers"])["poses"]
                 marker_id_list = json.loads(log_data["aruco_markers"])["marker_ids"]

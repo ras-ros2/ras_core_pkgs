@@ -12,6 +12,11 @@ find_package(ament_cmake_python REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 install(DIRECTORY scripts/
  DESTINATION lib/${PROJECT_NAME}/)
 

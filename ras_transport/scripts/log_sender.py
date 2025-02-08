@@ -100,6 +100,7 @@ class ArmLogger(LifecycleNode):
         }
         
         payload = json.dumps(self.trajlog)
+        print(f"publishing logging data: {self.trajlog}")
         self.mqtt_pub.publish(payload)
         
         response.success = True

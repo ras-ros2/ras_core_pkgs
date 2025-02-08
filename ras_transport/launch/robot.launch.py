@@ -5,20 +5,26 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='ras_transport',
-            executable='ras_transport_node',
-            name='ras_transport_node',
+            executable='iot_receiver.py',
+            name='iot_receiver',
             output='screen'
         ),
         Node(
             package='ras_transport',
-            executable='aws_mqtt_bridge_node',
-            name='aws_mqtt_bridge_node',
+            executable='ftp_server.py',
+            name='ftp_server',
             output='screen'
         ),
         Node(
             package='ras_transport',
-            executable='aws_iot_core_bridge_node',
-            name='aws_iot_core_bridge_node',
+            executable='log_sender.py',
+            name='log_sender',
+            output='screen'
+        ),
+        Node(
+            package='ras_transport',
+            executable='transport_robot_service.py',
+            name='transport_robot_service',
             output='screen'
         )
     ])

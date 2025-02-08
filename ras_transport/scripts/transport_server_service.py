@@ -19,7 +19,7 @@ Email: info@opensciencestack.org
 
 import rclpy
 from rclpy.node import Node
-from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher, TransportServiceClient
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher, TransportServiceClient, TransportServiceServer
 from ras_interfaces.srv import ReadBlack
 import time
 from enum import Enum
@@ -34,10 +34,32 @@ class TransportServerService(Node):
         super().__init__('transport_server_service')
         self.service_server = self.create_service(ReadBlack, '/server_transport', self.service_server_cb)
         self.server_transport_client = TransportServiceClient("server_transport")
+        self.sync_robot_server = TransportServiceServer("sync_robot", self.sync_robot_cb)
         self.connect_aws()
+    
+
+    def sync_robot_cb(self, message):
+        print("sync data received") # TODO(Sachin): remove this later
+        payload = json.loads(message)
+        if payload["sync_robot"]:
+            print("Syncing robot")
+            payload = {
+                "success": True
+            }
+        else:
+            print("Syncing is not performed")
+            payload = {
+                "success": True
+            }
+        return json.dumps(payload)
+
+        
+
+    
 
     def connect_aws(self):
         self.server_transport_client.connect_with_retries()
+        self.sync_robot_server.connect_with_retries()
 
     def service_server_cb(self, request: ReadBlack.Request, response: ReadBlack.Response):
         if request.blackboard == TransportCommands.HOME.value:
@@ -59,11 +81,13 @@ def main(args=None):
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.1)
             node.server_transport_client.loop()
+            node.sync_robot_server.loop()
     except KeyboardInterrupt:
         pass
     finally:
         # Cleanup and disconnect
         node.server_transport_client.disconnect()
+        node.sync_robot_server.disconnect()
         node.destroy_node()
         rclpy.shutdown()
 

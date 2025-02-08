@@ -375,6 +375,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
   void MoveitServer::sync_callback(const std::shared_ptr<ras_interfaces::srv::JointSat::Request> request,
       std::shared_ptr<ras_interfaces::srv::JointSat::Response> response)
   {
+    RCLCPP_INFO(this->get_logger(), "MoveitServer::sync_callback called");
     std::vector<double> joint_values;
     for (const auto& x : request->joint_state.position)
     {
@@ -384,6 +385,17 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     move_group_arm->setJointValueTarget(joint_values);
     move_group_arm->setMaxVelocityScalingFactor(0.7);
     move_group_arm->setMaxAccelerationScalingFactor(0.7);
+    // testing purpose
+    move_group_arm->setWorkspace(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0);
+    
+    // move_group_arm->setPlannerId("RRTConnectkConfigDefault");
+
+    move_group_arm->setNumPlanningAttempts(5);
+    move_group_arm->setPlanningTime(2);
+    move_group_arm->setGoalTolerance(0.01);
+    move_group_arm->setGoalOrientationTolerance(0.035);
+    move_group_arm->clearPathConstraints();
+    
     moveit::planning_interface::MoveGroupInterface::Plan my_plan;
     bool result = (move_group_arm->plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS);
     if (result)

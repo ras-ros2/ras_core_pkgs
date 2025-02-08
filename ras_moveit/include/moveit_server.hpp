@@ -72,9 +72,9 @@ public:
 private:
     std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_arm;
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-    moveit::core::RobotStatePtr current_state_arm;
-    const moveit::core::JointModelGroup *joint_model_group_arm;
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan_arm;
+    // moveit::core::RobotStatePtr current_state_arm;
+    // const moveit::core::JointModelGroup *joint_model_group_arm;
+    // moveit::planning_interface::MoveGroupInterface::Plan my_plan_arm;
 
     rclcpp::Service<ras_interfaces::srv::PoseReq>::SharedPtr move_to_pose_srv_;
     rclcpp::Service<ras_interfaces::srv::JointReq>::SharedPtr move_to_joint_srv_;

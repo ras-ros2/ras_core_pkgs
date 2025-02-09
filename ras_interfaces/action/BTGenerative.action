@@ -1,0 +1,9 @@
+string module_path
+string class_name
+BTGenMapping[] class_arguments
+BTGenMapping[] input_ports
+---
+BTNodeStatus status
+BTGenMapping[] output_ports
+---
+BTNodeStatus status

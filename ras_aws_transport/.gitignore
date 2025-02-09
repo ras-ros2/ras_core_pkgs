@@ -1,6 +1,0 @@
-real_bot_zip/*
-!real_bot_zip/.keep
-scripts/__pycache__/
-scripts/log.txt
-aws_cert/*
-!aws_cert/.keep

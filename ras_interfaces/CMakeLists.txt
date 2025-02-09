@@ -24,10 +24,12 @@ set(msg_files
   "msg/ObjectState.msg"
   "msg/Instruction.msg"
   "msg/BTNodeStatus.msg"
+  "msg/BTGenMapping.msg"
 )
 set(srv_files
   "srv/PrimitiveExec.srv"
   "srv/PoseReq.srv"
+  "srv/JointReq.srv"
   "srv/LoadExp.srv"
   "srv/AddObject.srv"
   "srv/StatusLog.srv"
@@ -50,6 +52,7 @@ set(action_files
   "action/BTPrimitive.action"
   "action/ExecuteTraj.action"
   "action/ExecuteExp.action"
+  "action/BTGenerative.action"
 )
 
 

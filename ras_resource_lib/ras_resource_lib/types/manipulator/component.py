@@ -35,7 +35,9 @@ class ManipulatorComponent(OssComponent):
         super().__post_init__()
         self.movegroup_name = self._internal_config.movegroup_name
         self.moveit_config = self._internal_config.moveit_config
-        self.launch_actions = self._internal_config.launch_actions
+        # self.launch_actions = self._internal_config.launch_actions
+        self.sim_launch_actions = self._internal_config.sim_launch_actions
+        self.real_launch_actions = self._internal_config.real_launch_actions
 
     def execute_trajectory(self,trajectory: JointTrajectory):
         self._internal_config.execute_trajectory(trajectory)

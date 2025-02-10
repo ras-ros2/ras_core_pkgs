@@ -34,7 +34,9 @@ class ManipulatorCfg(AssetConfig):
 
     movegroup_name : str
     moveit_config : dict
-    launch_actions : List[ExecuteProcess]
+    # launch_actions : List[ExecuteProcess]
+    sim_launch_actions : List[ExecuteProcess]
+    real_launch_actions : List[ExecuteProcess]
 
     @abstractmethod
     def execute_trajectory(self,trajectory: JointTrajectory):

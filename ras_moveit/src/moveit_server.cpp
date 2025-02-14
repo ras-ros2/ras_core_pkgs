@@ -31,6 +31,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
   this->declare_parameter("collision_object_frame", "world");
   this->declare_parameter("base_frame_id", "link_base");
   this->declare_parameter("end_effector_frame_id", "link_eef");
+  this->declare_parameter("planner_id", "RRTConnect");
   this->declare_parameter<double>("orientation_tolerance.x", 0.75);
   this->declare_parameter<double>("orientation_tolerance.y", 0.75);
   this->declare_parameter<double>("orientation_tolerance.z", 0.75);
@@ -69,6 +70,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
   planning_parameters_.sync.goal_orientation_tolerance = this->get_parameter("sync.goal_orientation_tolerance").as_double();
   planning_parameters_.sync.velocity_scaling_factor = this->get_parameter("sync.velocity_scaling_factor").as_double();
   planning_parameters_.sync.acceleration_scaling_factor = this->get_parameter("sync.acceleration_scaling_factor").as_double();
+  planning_parameters_.planner_id = this->get_parameter("planner_id").as_string();
 
   
   move_group_name = this->get_parameter("move_group_name").as_string();
@@ -187,7 +189,7 @@ bool MoveitServer::Execute(const geometry_msgs::msg::Pose target_pose, const Mot
 void MoveitServer::configure_move_group(const MotionFactor motion_factor)
 {
   move_group_arm->setWorkspace(planning_parameters_.workspace.minx, planning_parameters_.workspace.miny, planning_parameters_.workspace.minz, planning_parameters_.workspace.maxx, planning_parameters_.workspace.maxy, planning_parameters_.workspace.maxz);
-  // move_group_arm->setPlannerId("RRTConnectkConfigDefault"); // TODO(Sachin): Check if this planner is defined already
+  move_group_arm->setPlannerId(planning_parameters_.planner_id);
   move_group_arm->setNumPlanningAttempts(motion_factor.planning_attempts);
   move_group_arm->setPlanningTime(motion_factor.planning_time);
   move_group_arm->setGoalTolerance(motion_factor.goal_tolerance);

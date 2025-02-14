@@ -85,6 +85,7 @@ struct PlanningParameters
   Workspace workspace;
   MotionFactor sync;
   MotionFactor trajectory;
+  std::string planner_id;
 };
 
 class MoveitServer : public rclcpp::Node, public std::enable_shared_from_this<MoveitServer>

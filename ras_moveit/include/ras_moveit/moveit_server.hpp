@@ -52,22 +52,39 @@
 using moveit::planning_interface::MoveGroupInterface;
 
 
-struct OrientationTolerance
+struct Tolerance
 {
   double x;
   double y;
   double z;
 };
 
-struct PlanningParameters
+struct Workspace
 {
-  OrientationTolerance orientation_tolerance;
+  double minx;
+  double miny;
+  double minz;
+  double maxx;
+  double maxy;
+  double maxz;
+};
+
+struct MotionFactor
+{
+  double velocity_scaling_factor;
+  double acceleration_scaling_factor;
   int planning_attempts;
   double planning_time;
   double goal_tolerance;
   double goal_orientation_tolerance;
-  double velocity_scaling_factor;
-  double acceleration_scaling_factor;
+};
+
+struct PlanningParameters
+{
+  Tolerance orientation_tolerance;
+  Workspace workspace;
+  MotionFactor sync;
+  MotionFactor trajectory;
 };
 
 class MoveitServer : public rclcpp::Node, public std::enable_shared_from_this<MoveitServer>
@@ -81,8 +98,8 @@ public:
   void joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
   void sync_callback(const std::shared_ptr<ras_interfaces::srv::JointSat::Request> request, std::shared_ptr<ras_interfaces::srv::JointSat::Response> response);
   void set_constraints(const geometry_msgs::msg::Pose::_orientation_type &quat);
-  bool Execute(geometry_msgs::msg::Pose target_pose);
-  bool Execute(sensor_msgs::msg::JointState target_joints);
+  bool Execute(const geometry_msgs::msg::Pose target_pose, const MotionFactor motion);
+  bool Execute(const sensor_msgs::msg::JointState target_joints, const MotionFactor motion);
   void trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
                            std::shared_ptr<ras_interfaces::srv::ActionTraj::Response> response);
   // void trajectory_callback(const std::shared_ptr<ras_interfaces::srv::ActionTraj::Request> request,
@@ -90,8 +107,8 @@ public:
   void AddScenePlane();
 
 private:
-  void configure_move_group();
-  bool plan_and_execute_with_retries();
+  void configure_move_group(const MotionFactor motion_factor);
+  bool plan_and_execute_with_retries(bool publish_trajectory = true);
 
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_arm;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;

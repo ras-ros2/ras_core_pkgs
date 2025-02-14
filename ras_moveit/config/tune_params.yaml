@@ -7,9 +7,24 @@ moveit_server:
       x: 0.75
       y: 0.75
       z: 0.75
-    planning_attempts: 5
-    planning_time: 2.0
-    goal_tolerance: 0.005
-    goal_orientation_tolerance: 0.005
-    velocity_scaling_factor: 0.2
-    acceleration_scaling_factor: 0.4
+    trajectory:
+      velocity_scaling_factor: 0.2
+      acceleration_scaling_factor: 0.4
+      planning_attempts: 5
+      planning_time: 2.0
+      goal_tolerance: 0.005
+      goal_orientation_tolerance: 0.005
+    sync:
+      velocity_scaling_factor: 0.8
+      acceleration_scaling_factor: 1.0
+      planning_attempts: 5
+      planning_time: 2.0
+      goal_tolerance: 0.005
+      goal_orientation_tolerance: 0.005
+    workspace:
+      minx: -1.0
+      miny: -1.0
+      minz: -1.0
+      maxx: 1.0
+      maxy: 1.0
+      maxz: 1.0

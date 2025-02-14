@@ -34,26 +34,44 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
   this->declare_parameter<double>("orientation_tolerance.x", 0.75);
   this->declare_parameter<double>("orientation_tolerance.y", 0.75);
   this->declare_parameter<double>("orientation_tolerance.z", 0.75);
-  this->declare_parameter<int>("planning_attempts", 5);
-  this->declare_parameter<double>("planning_time", 2.0);
-  this->declare_parameter<double>("goal_tolerance", 0.005);
-  this->declare_parameter<double>("goal_orientation_tolerance", 0.005);
-  this->declare_parameter<double>("velocity_scaling_factor", 0.2);
-  this->declare_parameter<double>("acceleration_scaling_factor", 0.4);
+  this->declare_parameter<int>("trajectory.planning_attempts", 5);
+  this->declare_parameter<double>("trajectory.planning_time", 2.0);
+  this->declare_parameter<double>("trajectory.goal_tolerance", 0.005);
+  this->declare_parameter<double>("trajectory.goal_orientation_tolerance", 0.005);
+  this->declare_parameter<double>("trajectory.velocity_scaling_factor", 0.2);
+  this->declare_parameter<double>("trajectory.acceleration_scaling_factor", 0.4);
+  this->declare_parameter<int>("sync.planning_attempts", 5);
+  this->declare_parameter<double>("sync.planning_time", 2.0);
+  this->declare_parameter<double>("sync.goal_tolerance", 0.005);
+  this->declare_parameter<double>("sync.goal_orientation_tolerance", 0.005);
+  this->declare_parameter<double>("sync.velocity_scaling_factor", 0.2);
+  this->declare_parameter<double>("sync.acceleration_scaling_factor", 0.4);
+
+  this->declare_parameter<double>("workspace.minx", -1.0);
+  this->declare_parameter<double>("workspace.miny", -1.0);
+  this->declare_parameter<double>("workspace.minz", -1.0);
+  this->declare_parameter<double>("workspace.maxx", 1.0);
+  this->declare_parameter<double>("workspace.maxy", 1.0);
+  this->declare_parameter<double>("workspace.maxz", 1.0);
 
   planning_parameters_.orientation_tolerance.x = this->get_parameter("orientation_tolerance.x").as_double();
   planning_parameters_.orientation_tolerance.y = this->get_parameter("orientation_tolerance.y").as_double();
   planning_parameters_.orientation_tolerance.z = this->get_parameter("orientation_tolerance.z").as_double();
-  planning_parameters_.planning_attempts = this->get_parameter("planning_attempts").as_int();
-  planning_parameters_.planning_time = this->get_parameter("planning_time").as_double();
-  planning_parameters_.goal_tolerance = this->get_parameter("goal_tolerance").as_double();
-  planning_parameters_.goal_orientation_tolerance = this->get_parameter("goal_orientation_tolerance").as_double();
-  planning_parameters_.velocity_scaling_factor = this->get_parameter("velocity_scaling_factor").as_double();
-  planning_parameters_.acceleration_scaling_factor = this->get_parameter("acceleration_scaling_factor").as_double();
+  planning_parameters_.trajectory.planning_attempts = this->get_parameter("trajectory.planning_attempts").as_int();
+  planning_parameters_.trajectory.planning_time = this->get_parameter("trajectory.planning_time").as_double();
+  planning_parameters_.trajectory.goal_tolerance = this->get_parameter("trajectory.goal_tolerance").as_double();
+  planning_parameters_.trajectory.goal_orientation_tolerance = this->get_parameter("trajectory.goal_orientation_tolerance").as_double();
+  planning_parameters_.trajectory.velocity_scaling_factor = this->get_parameter("trajectory.velocity_scaling_factor").as_double();
+  planning_parameters_.trajectory.acceleration_scaling_factor = this->get_parameter("trajectory.acceleration_scaling_factor").as_double();
+  planning_parameters_.sync.planning_attempts = this->get_parameter("sync.planning_attempts").as_int();
+  planning_parameters_.sync.planning_time = this->get_parameter("sync.planning_time").as_double();
+  planning_parameters_.sync.goal_tolerance = this->get_parameter("sync.goal_tolerance").as_double();
+  planning_parameters_.sync.goal_orientation_tolerance = this->get_parameter("sync.goal_orientation_tolerance").as_double();
+  planning_parameters_.sync.velocity_scaling_factor = this->get_parameter("sync.velocity_scaling_factor").as_double();
+  planning_parameters_.sync.acceleration_scaling_factor = this->get_parameter("sync.acceleration_scaling_factor").as_double();
 
   
   move_group_name = this->get_parameter("move_group_name").as_string();
-  RCLCPP_INFO(this->get_logger(), "Movegrup name is %s Acceleration scaling factor: %f", move_group_name.c_str(), planning_parameters_.acceleration_scaling_factor);
   collision_object_frame = this->get_parameter("collision_object_frame").as_string();
   base_frame_id = this->get_parameter("base_frame_id").as_string();
   end_effector_frame_id = this->get_parameter("end_effector_frame_id").as_string();
@@ -145,40 +163,40 @@ void MoveitServer::set_constraints(const geometry_msgs::msg::Pose::_orientation_
   move_group_arm->setPathConstraints(goal_constraints);
 }
 
-bool MoveitServer::Execute(sensor_msgs::msg::JointState target_joints)
+bool MoveitServer::Execute(const sensor_msgs::msg::JointState target_joints, const MotionFactor motion)
 {
   // move_group_arm->clearPathConstraints();
   // RCLCPP_INFO(this->get_logger(), "clear constraints");
-  configure_move_group();
+  configure_move_group(motion);
   move_group_arm->setJointValueTarget(target_joints);
   return plan_and_execute_with_retries();
 }
 
-bool MoveitServer::Execute(geometry_msgs::msg::Pose target_pose)
+bool MoveitServer::Execute(const geometry_msgs::msg::Pose target_pose, const MotionFactor motion)
 {
   trajectory_msgs::msg::JointTrajectory trajectory_msg;
   // move_group_arm->clearPathConstraints();
   RCLCPP_INFO(this->get_logger(), "clear constraints");
   
-  configure_move_group();
+  configure_move_group(motion);
   set_constraints(target_pose.orientation);
   move_group_arm->setPoseTarget(target_pose);
   return plan_and_execute_with_retries();
 }
 
-void MoveitServer::configure_move_group()
+void MoveitServer::configure_move_group(const MotionFactor motion_factor)
 {
-  move_group_arm->setWorkspace(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0);
-  move_group_arm->setPlannerId("RRTConnectkConfigDefault");
-  move_group_arm->setNumPlanningAttempts(planning_parameters_.planning_attempts);
-  move_group_arm->setPlanningTime(planning_parameters_.planning_time);
-  move_group_arm->setGoalTolerance(planning_parameters_.goal_tolerance);
-  move_group_arm->setGoalOrientationTolerance(planning_parameters_.goal_orientation_tolerance);
-  move_group_arm->setMaxVelocityScalingFactor(planning_parameters_.velocity_scaling_factor);
-  move_group_arm->setMaxAccelerationScalingFactor(planning_parameters_.acceleration_scaling_factor);
+  move_group_arm->setWorkspace(planning_parameters_.workspace.minx, planning_parameters_.workspace.miny, planning_parameters_.workspace.minz, planning_parameters_.workspace.maxx, planning_parameters_.workspace.maxy, planning_parameters_.workspace.maxz);
+  // move_group_arm->setPlannerId("RRTConnectkConfigDefault"); // TODO(Sachin): Check if this planner is defined already
+  move_group_arm->setNumPlanningAttempts(motion_factor.planning_attempts);
+  move_group_arm->setPlanningTime(motion_factor.planning_time);
+  move_group_arm->setGoalTolerance(motion_factor.goal_tolerance);
+  move_group_arm->setGoalOrientationTolerance(motion_factor.goal_orientation_tolerance);
+  move_group_arm->setMaxVelocityScalingFactor(motion_factor.velocity_scaling_factor);
+  move_group_arm->setMaxAccelerationScalingFactor(motion_factor.acceleration_scaling_factor);
 }
 
-bool MoveitServer::plan_and_execute_with_retries()
+bool MoveitServer::plan_and_execute_with_retries(bool publish_trajectory)
 {
   trajectory_msgs::msg::JointTrajectory trajectory_msg;
   int count = 15;
@@ -192,7 +210,10 @@ bool MoveitServer::plan_and_execute_with_retries()
       if (success)
       {
         move_group_arm->execute(my_plan);
-        trajectory_pub->publish(trajectory_msg);
+        if (publish_trajectory)
+        {
+          trajectory_pub->publish(trajectory_msg);
+        }
         break;
       }
     }
@@ -206,7 +227,10 @@ bool MoveitServer::plan_and_execute_with_retries()
       if (success2)
       {
         move_group_arm->execute(my_plan2);
-        trajectory_pub->publish(trajectory_msg);
+        if (publish_trajectory)
+        {
+          trajectory_pub->publish(trajectory_msg);
+        }
         break;
       }
       else

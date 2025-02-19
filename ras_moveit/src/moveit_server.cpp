@@ -228,9 +228,10 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     
     move_group_arm->setPlannerId("RRTConnectkConfigDefault");
     int plan_counts = 5;
+    float goal_tolerance = 0.005;
     move_group_arm->setNumPlanningAttempts(plan_counts);
     move_group_arm->setPlanningTime(3);
-    move_group_arm->setGoalTolerance(0.005);
+    move_group_arm->setGoalTolerance(goal_tolerance);
     move_group_arm->setGoalOrientationTolerance(0.005);
     move_group_arm->setMaxVelocityScalingFactor(0.2);
     move_group_arm->setMaxAccelerationScalingFactor(0.4);
@@ -249,6 +250,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     moveit::planning_interface::MoveGroupInterface::Plan best_plan;
     const double cost_difference_threshold = 0.35; 
     int similar_cost_count = 0;
+    moveit::core::RobotStatePtr robot_state(new moveit::core::RobotState(move_group_arm->getRobotModel()));
 
     for (int i = 0; i < count; i++)
     {
@@ -265,7 +267,19 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
         {
           cost = my_plan.trajectory_.joint_trajectory.points.back().time_from_start.sec +
             my_plan.trajectory_.joint_trajectory.points.back().time_from_start.nanosec * 1e-9;
-          goal_error = my_plan.trajectory_.joint_trajectory.points.back().positions.size();
+            
+            auto last_point = my_plan.trajectory_.joint_trajectory.points.back();
+            robot_state->setVariablePositions(last_point.positions);
+            robot_state->update();
+
+            const std::string end_effector_link = move_group_arm->getEndEffectorLink();
+            const auto& ee_pose = robot_state->getGlobalLinkTransform(end_effector_link);
+            const auto& target_position = target_pose.position;
+            const auto& ee_position = ee_pose.translation();
+
+            goal_error = std::pow(target_position.x - ee_position.x(), 2) +
+              std::pow(target_position.y - ee_position.y(), 2) +
+              std::pow(target_position.z - ee_position.z(), 2);
         }
         cost += 0.1 * my_plan.trajectory_.joint_trajectory.points.size();
 

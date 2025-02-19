@@ -84,10 +84,20 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
   // Convert JointTrajectory to RobotTrajectory
   robot_trajectory.joint_trajectory = request->traj;
+    // move_group_arm->setWorkspace(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0);
+    
+    // move_group_arm->setPlannerId("RRTConnectkConfigDefault");
 
-  bool success = (move_group_arm->execute(robot_trajectory) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    move_group_arm->setNumPlanningAttempts(5);
+    move_group_arm->setPlanningTime(3.5);
+    move_group_arm->setGoalTolerance(0.005);
+    move_group_arm->setGoalOrientationTolerance(0.005);
+    // move_group_arm->setMaxVelocityScalingFactor(0.2);
+    // move_group_arm->setMaxAccelerationScalingFactor(0.4);
 
-  response->success = 1;
+  bool status = (move_group_arm->execute(robot_trajectory) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+  response->success = status;
   }
   
   void MoveitServer::AddScenePlane()
@@ -156,7 +166,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     move_group_arm->setPlannerId("RRTConnectkConfigDefault");
 
     move_group_arm->setNumPlanningAttempts(5);
-    move_group_arm->setPlanningTime(1);
+    move_group_arm->setPlanningTime(3);
     move_group_arm->setGoalTolerance(0.005);
     move_group_arm->setGoalOrientationTolerance(0.005);
     move_group_arm->setMaxVelocityScalingFactor(0.2);
@@ -177,11 +187,11 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
         moveit::planning_interface::MoveGroupInterface::Plan my_plan;
         bool success = (move_group_arm->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
         RCLCPP_INFO(this->get_logger(),"after target plan");
-        trajectory_msg = my_plan.trajectory_.joint_trajectory;
+        // trajectory_msg = my_plan.trajectory_.joint_trajectory;
         if (success)
         {
         move_group_arm->execute(my_plan);
-        trajectory_pub->publish(trajectory_msg);
+        // trajectory_pub->publish(trajectory_msg);
         return 1;
         }
         }
@@ -191,11 +201,11 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
         RCLCPP_INFO(this->get_logger(), "Clearning Constraints");
         moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
         bool success2 = (move_group_arm->plan(my_plan2) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-        trajectory_msg = my_plan2.trajectory_.joint_trajectory;
+        // trajectory_msg = my_plan2.trajectory_.joint_trajectory;
         if (success2)
         {
         move_group_arm->execute(my_plan2);
-        trajectory_pub->publish(trajectory_msg);
+        // trajectory_pub->publish(trajectory_msg);
         return 1;
         }
         else
@@ -217,10 +227,11 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     move_group_arm->setWorkspace(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0);
     
     move_group_arm->setPlannerId("RRTConnectkConfigDefault");
-
-    move_group_arm->setNumPlanningAttempts(5);
-    move_group_arm->setPlanningTime(1);
-    move_group_arm->setGoalTolerance(0.005);
+    int plan_counts = 5;
+    float goal_tolerance = 0.005;
+    move_group_arm->setNumPlanningAttempts(plan_counts);
+    move_group_arm->setPlanningTime(3);
+    move_group_arm->setGoalTolerance(goal_tolerance);
     move_group_arm->setGoalOrientationTolerance(0.005);
     move_group_arm->setMaxVelocityScalingFactor(0.2);
     move_group_arm->setMaxAccelerationScalingFactor(0.4);
@@ -232,42 +243,94 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     move_group_arm->setPoseTarget(target_pose);
 
     RCLCPP_INFO(this->get_logger(),"after target pose");
+    int count = plan_counts;
+    std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
+    double best_cost = std::numeric_limits<double>::max();
+    double best_goal_error = std::numeric_limits<double>::max();
+    moveit::planning_interface::MoveGroupInterface::Plan best_plan;
+    const double cost_difference_threshold = 0.35; 
+    int similar_cost_count = 0;
+    moveit::core::RobotStatePtr robot_state(new moveit::core::RobotState(move_group_arm->getRobotModel()));
 
-    int count = 15;
     for (int i = 0; i < count; i++)
     {
-        if (i < count-2)
+      moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+      bool success = (move_group_arm->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+      if (success)
+      {
+        plans.push_back(my_plan);
+        double cost = 0.0;
+        double goal_error = 0.0;
+
+        if (!my_plan.trajectory_.joint_trajectory.points.empty())
         {
-        moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-        bool success = (move_group_arm->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-        RCLCPP_INFO(this->get_logger(),"after target plan");
-        trajectory_msg = my_plan.trajectory_.joint_trajectory;
-        if (success)
-        {
-        move_group_arm->execute(my_plan);
-        trajectory_pub->publish(trajectory_msg);
-        return 1;
+          cost = my_plan.trajectory_.joint_trajectory.points.back().time_from_start.sec +
+            my_plan.trajectory_.joint_trajectory.points.back().time_from_start.nanosec * 1e-9;
+            
+            auto last_point = my_plan.trajectory_.joint_trajectory.points.back();
+            robot_state->setVariablePositions(last_point.positions);
+            robot_state->update();
+
+            const std::string end_effector_link = move_group_arm->getEndEffectorLink();
+            const auto& ee_pose = robot_state->getGlobalLinkTransform(end_effector_link);
+            const auto& target_position = target_pose.position;
+            const auto& ee_position = ee_pose.translation();
+
+            goal_error = std::pow(target_position.x - ee_position.x(), 2) +
+              std::pow(target_position.y - ee_position.y(), 2) +
+              std::pow(target_position.z - ee_position.z(), 2);
         }
-        }
-        else
+        cost += 0.1 * my_plan.trajectory_.joint_trajectory.points.size();
+
+        RCLCPP_INFO(this->get_logger(), "Plan %d -> Cost: %f, Goal Error: %f", i, cost, goal_error);
+
+        if (cost < best_cost || (cost - best_cost < cost_difference_threshold && goal_error < best_goal_error))
         {
-        move_group_arm->clearPathConstraints();
-        RCLCPP_INFO(this->get_logger(), "Clearning Constraints");
-        moveit::planning_interface::MoveGroupInterface::Plan my_plan2;
-        bool success2 = (move_group_arm->plan(my_plan2) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-        trajectory_msg = my_plan2.trajectory_.joint_trajectory;
-        if (success2)
-        {
-        move_group_arm->execute(my_plan2);
-        trajectory_pub->publish(trajectory_msg);
-        return 1;
+          if (best_cost - cost < cost_difference_threshold)
+          {
+            similar_cost_count++;
+          }
+          else
+          {
+            similar_cost_count = 0; 
+          }
+          best_cost = cost;
+          best_goal_error = goal_error;
+          best_plan = my_plan;
         }
-        else
+        if (similar_cost_count >= 3)
         {
-          return 0;
+          RCLCPP_INFO(this->get_logger(), "Stopping early: Similar cost plans detected.");
+          break;
         }
-        }   
+        if(plans.size() >= 3)
+        {
+          RCLCPP_INFO(this->get_logger(), "Stopping early: 3 plans found.");
+          break;
+        }
+      } else if ((plans.size() < 3) && (i == count - 3))
+      {
+      move_group_arm->clearPathConstraints();
+      }
     }
+    if (!plans.empty())
+    {
+        RCLCPP_INFO(this->get_logger(), "Best plan selected with cost: %f", best_cost);
+
+        move_group_arm->execute(best_plan);
+        trajectory_msg = best_plan.trajectory_.joint_trajectory;
+        trajectory_pub->publish(trajectory_msg);
+        return 1;
+    }
+    else
+    {
+        RCLCPP_WARN(this->get_logger(), "No valid plans found.");
+        return 0;
+    }
+
+
+    return 0;
   }
 
   void MoveitServer::move_to_pose_callback(
@@ -392,7 +455,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
     move_group_arm->setNumPlanningAttempts(5);
     move_group_arm->setPlanningTime(2);
-    move_group_arm->setGoalTolerance(0.01);
+    move_group_arm->setGoalTolerance(0.02);
     move_group_arm->setGoalOrientationTolerance(0.035);
     move_group_arm->clearPathConstraints();
     

@@ -9,14 +9,14 @@ CONFIG_FILE = CONFIG_PATH/"ras_conf.yaml"
 
 
 @dataclass
-class FTPConfig(ConfigLoaderBase):
+class FileTransportCfg(ConfigLoaderBase):
     ip: str
     port: int
 
 @dataclass
-class FTPsConfig(ConfigLoaderBase):
-    server : FTPConfig
-    robot : FTPConfig
+class FileTransportsCfg(ConfigLoaderBase):
+    server : FileTransportCfg
+    robot : FileTransportCfg
 
 @dataclass
 class MQTTConfig(ConfigLoaderBase):
@@ -26,7 +26,7 @@ class MQTTConfig(ConfigLoaderBase):
 @dataclass
 class TransportConfig(ConfigLoaderBase):
     implementation: str
-    ftp: FTPsConfig
+    file_server: FileTransportsCfg
     mqtt: MQTTConfig
 
 @dataclass

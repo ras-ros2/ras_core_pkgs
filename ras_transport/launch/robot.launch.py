@@ -11,8 +11,8 @@ def generate_launch_description():
         ),
         Node(
             package='ras_transport',
-            executable='ftp_server.py',
-            name='ftp_server',
+            executable='file_server.py',
+            name='file_server',
             output='screen'
         ),
         Node(

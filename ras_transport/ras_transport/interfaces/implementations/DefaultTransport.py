@@ -249,7 +249,7 @@ class HttpServer(FileServerInterface):
     def serve(self) -> None:
         if not self.is_connected():
             self.connect()
-        self.app.run(port=self.port)
+        self.app.run(host="0.0.0.0",port=self.port)
     
     def disconnect(self) -> None:
         if not self.is_connected():
@@ -328,7 +328,11 @@ class HttpClient(FileClientInterface):
 
 def run_mosquitto_broker(port:int):
     import subprocess
-    subprocess.run(f"mosquitto -p {port}", shell=True)
+    from tempfile import NamedTemporaryFile
+    config_file = NamedTemporaryFile("w")
+    config_file.write(f"listener {port} 0.0.0.0\nallow_anonymous true\n")
+    config_file.flush()
+    subprocess.run(f"mosquitto -p {port} -c {config_file.name}", shell=True)
 
 default_transport = TransportImplementation(
     name = "default",

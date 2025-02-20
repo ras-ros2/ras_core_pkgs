@@ -1,8 +1,8 @@
-from ras_common.config.loaders.ras_config import RasObject as RasConfigLoader,FTPConfig
+from ras_common.config.loaders.ras_config import RasObject as RasConfigLoader,FileTransportCfg
 import os
 from pathlib import Path
 from .TransportLoader import TransportLoader
-from ras_common.globals import RAS_APP_PATH
+from ras_common.globals import RAS_APP_PATH,RAS_APP_NAME
 from threading import Thread
 import queue
 import time
@@ -10,27 +10,27 @@ import time
 
 class TransportFileServer(object):
     serve_path = Path(RAS_APP_PATH)/"serve"
-    def __init__(self, name: str) -> None:
+    def __init__(self) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
         self.serve_path.mkdir(parents=True, exist_ok=True)
-        self.name = name
+        self.name = RAS_APP_NAME
         transport_conf = RasConfigLoader.ras.transport
         file_server = TransportLoader.get_transport(transport_conf.implementation).file_server
-        ftp_conf = transport_conf.ftp
-        if not hasattr(ftp_conf, self.name):
-            raise Exception(f"FTP configuration for {self.name} not found")
-        ftp_conf : FTPConfig = getattr(ftp_conf, self.name)
-        self.ftpserver = file_server(self.serve_path,ftp_conf.ip,ftp_conf.port)
+        file_conf = transport_conf.file_server
+        if not hasattr(file_conf, self.name):
+            raise Exception(f"FileTransport configuration for {self.name} not found")
+        file_conf : FileTransportCfg = getattr(file_conf, self.name)
+        self.file_server = file_server(self.serve_path,file_conf.ip,file_conf.port)
 
     def serve(self):
-        self.ftpserver.serve()
+        self.file_server.serve()
     
     def connect(self):
-        self.ftpserver.connect()
+        self.file_server.connect()
 
     def safe_kill(self):
-        self.ftpserver.safe_kill()
+        self.file_server.safe_kill()
 
     def __del__(self):
         self.safe_kill()
@@ -41,14 +41,14 @@ class TransportFileClient(object):
         RasConfigLoader.init()
         self.name = name
         file_client = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).file_client
-        ftp_conf = RasConfigLoader.ras.transport.ftp
-        if not hasattr(ftp_conf, self.name):
+        file_conf = RasConfigLoader.ras.transport.file_server
+        if not hasattr(file_conf, self.name):
             raise Exception(f"FTP configuration for {self.name} not found")
-        ftp_conf : FTPConfig = getattr(ftp_conf, self.name)
-        self.ftpclient = file_client(ftp_conf.ip,ftp_conf.port)
+        file_conf : FileTransportCfg = getattr(file_conf, self.name)
+        self.file_client = file_client(file_conf.ip,file_conf.port)
     
     def connect(self):
-        self.ftpclient.connect()
+        self.file_client.connect()
     
     def connect_with_retries(self,delay_sec=5):
         import time
@@ -62,13 +62,13 @@ class TransportFileClient(object):
                 time.sleep(delay_sec)
 
     def upload(self, local_path: Path, remote_path: Path):
-        self.ftpclient.upload(local_path, remote_path)
+        self.file_client.upload(local_path, remote_path)
 
     def download(self, remote_path: Path, local_path: Path):
-        self.ftpclient.download(remote_path, local_path)
+        self.file_client.download(remote_path, local_path)
     
     def disconnect(self):
-        self.ftpclient.disconnect()
+        self.file_client.disconnect()
     
     def __del__(self):
         self.disconnect()

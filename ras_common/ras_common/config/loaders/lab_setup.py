@@ -30,12 +30,14 @@ from dataclasses import dataclass
 from .common import PoseConfig
 import os 
 from ...globals import RAS_CONFIGS_PATH,RAS_APP_NAME
+from typing import Dict
 CONFIG_FILE = Path(RAS_CONFIGS_PATH)/"lab_setup.yaml"
 
 @dataclass
 class RobotConfig(ConfigLoaderBase):
     name: str
     pose: PoseConfig
+    home_joint_state: Dict[str, float|int]
 
 @dataclass
 class LabSetupConfig(ConfigLoaderBase):
@@ -56,7 +58,7 @@ class LabSetup(object):
         yaml_obj = YamlFormat.load(CONFIG_FILE)["lab_setup"]
         cls.conf = LabSetupConfig.from_dict(yaml_obj)
         cls.lab_name = cls.conf.lab_name
-        if (RAS_APP_NAME=="ras_real_lab"):
+        if (RAS_APP_NAME=="robot"):
             cls.lab_name = cls.conf.real_sim
 
         cls.robot_name = cls.conf.robot.name

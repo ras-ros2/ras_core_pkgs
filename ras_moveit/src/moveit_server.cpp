@@ -90,8 +90,8 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
     move_group_arm->setNumPlanningAttempts(5);
     move_group_arm->setPlanningTime(3.5);
-    move_group_arm->setGoalTolerance(0.005);
-    move_group_arm->setGoalOrientationTolerance(0.005);
+    move_group_arm->setGoalTolerance(0.003);
+    move_group_arm->setGoalOrientationTolerance(0.003);
     // move_group_arm->setMaxVelocityScalingFactor(0.2);
     // move_group_arm->setMaxAccelerationScalingFactor(0.4);
 
@@ -167,8 +167,8 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
     move_group_arm->setNumPlanningAttempts(5);
     move_group_arm->setPlanningTime(3);
-    move_group_arm->setGoalTolerance(0.005);
-    move_group_arm->setGoalOrientationTolerance(0.005);
+    move_group_arm->setGoalTolerance(0.003);
+    move_group_arm->setGoalOrientationTolerance(0.003);
     move_group_arm->setMaxVelocityScalingFactor(0.2);
     move_group_arm->setMaxAccelerationScalingFactor(0.4);
     RCLCPP_INFO(this->get_logger(),"beforeconstraints");
@@ -455,8 +455,8 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
     move_group_arm->setNumPlanningAttempts(5);
     move_group_arm->setPlanningTime(2);
-    move_group_arm->setGoalTolerance(0.02);
-    move_group_arm->setGoalOrientationTolerance(0.035);
+    move_group_arm->setGoalTolerance(0.001);
+    move_group_arm->setGoalOrientationTolerance(0.001);
     move_group_arm->clearPathConstraints();
     
     moveit::planning_interface::MoveGroupInterface::Plan my_plan;

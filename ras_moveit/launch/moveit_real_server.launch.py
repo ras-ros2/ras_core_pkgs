@@ -8,7 +8,7 @@ from ras_resource_lib.types.manipulator.component import ManipulatorComponent
 def generate_launch_description():
    AssetManager.init()
    LabLoader.init()
-   robot_component : ManipulatorComponent = AssetManager.get_asset_component(LabLoader.robot_name,AssetType.MANIPULATOR)
+#    robot_component : ManipulatorComponent = AssetManager.get_asset_component(LabLoader.robot_name,AssetType.MANIPULATOR)
    return LaunchDescription([
       Node(
         package='ras_moveit',
@@ -17,7 +17,7 @@ def generate_launch_description():
         name='moveit_server',
         output='screen',
         parameters=[
-            {'move_group_name': robot_component.movegroup_name},
+            {'move_group_name': "lite6"},
         ]
     ),
 

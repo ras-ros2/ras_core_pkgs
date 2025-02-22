@@ -3,11 +3,21 @@ from launch_ros.actions import Node
 from ras_common.config.loaders.ras_config import RasObject
 import socket
 
+def get_wifi_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "0.0.0.0"
+
 def generate_launch_description():
     RasObject.init()
     file_server_ip: str = RasObject.ras.transport.file_server.ip
     mqtt_broker_ip: str = RasObject.ras.transport.mqtt.ip
-    device_ip: str = socket.gethostbyname(socket.gethostname())
+    device_ip: str = get_wifi_ip()
 
     nodes = [
         Node(

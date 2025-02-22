@@ -13,10 +13,10 @@ class FileTransportCfg(ConfigLoaderBase):
     ip: str
     port: int
 
-@dataclass
-class FileTransportsCfg(ConfigLoaderBase):
-    server : FileTransportCfg
-    robot : FileTransportCfg
+# @dataclass
+# class FileTransportsCfg(ConfigLoaderBase):
+#     server : FileTransportCfg
+#     robot : FileTransportCfg
 
 @dataclass
 class MQTTConfig(ConfigLoaderBase):
@@ -26,7 +26,7 @@ class MQTTConfig(ConfigLoaderBase):
 @dataclass
 class TransportConfig(ConfigLoaderBase):
     implementation: str
-    file_server: FileTransportsCfg
+    file_server: FileTransportCfg
     mqtt: MQTTConfig
 
 @dataclass

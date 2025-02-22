@@ -1,11 +1,13 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from ras_common.config.loaders.ras_config import RasObject
+import socket
 
 def generate_launch_description():
     RasObject.init()
     file_server_ip: str = RasObject.ras.transport.file_server.ip
     mqtt_broker_ip: str = RasObject.ras.transport.mqtt.ip
+    device_ip: str = socket.gethostbyname(socket.gethostname())
 
     nodes = [
         Node(
@@ -28,7 +30,7 @@ def generate_launch_description():
         )
     ]
     
-    if mqtt_broker_ip in {"localhost", "127.0.0.1", "0.0.0.0"}:
+    if mqtt_broker_ip in {"localhost", "127.0.0.1", "0.0.0.0", device_ip}:
         nodes.append(
             Node(
                 package='ras_transport',
@@ -38,7 +40,7 @@ def generate_launch_description():
             )
         )
     
-    if file_server_ip in {"localhost", "127.0.0.1", "0.0.0.0"}:
+    if file_server_ip in {"localhost", "127.0.0.1", "0.0.0.0", device_ip}:
         nodes.append(
              Node(
                 package='ras_transport',

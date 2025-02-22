@@ -53,7 +53,7 @@ class TrajectoryLogger(LifecycleNode):
         my_callback_group = ReentrantCallbackGroup()
 
         self.path_client = self.create_client(SetPath, '/load_path')
-        self.file_client = TransportFileClient("robot")
+        self.file_client = TransportFileClient()
 
         self.instruction_msg = []
 

@@ -14,13 +14,9 @@ class TransportFileServer(object):
         TransportLoader.init()
         RasConfigLoader.init()
         self.serve_path.mkdir(parents=True, exist_ok=True)
-        self.name = RAS_APP_NAME
         transport_conf = RasConfigLoader.ras.transport
         file_server = TransportLoader.get_transport(transport_conf.implementation).file_server
         file_conf = transport_conf.file_server
-        # if not hasattr(file_conf, self.name):
-        #     raise Exception(f"FileTransport configuration for {self.name} not found")
-        # file_conf : FileTransportCfg = getattr(file_conf, self.name)
         self.file_server = file_server(self.serve_path,file_conf.ip,file_conf.port)
 
     def serve(self):
@@ -36,15 +32,11 @@ class TransportFileServer(object):
         self.safe_kill()
 
 class TransportFileClient(object):
-    def __init__(self, name: str) -> None:
+    def __init__(self) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
-        self.name = name
         file_client = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).file_client
         file_conf = RasConfigLoader.ras.transport.file_server
-        # if not hasattr(file_conf, self.name):
-        #     raise Exception(f"FTP configuration for {self.name} not found")
-        # file_conf : FileTransportCfg = getattr(file_conf, self.name)
         self.file_client = file_client(file_conf.ip,file_conf.port)
     
     def connect(self):
@@ -55,10 +47,10 @@ class TransportFileClient(object):
         while True:
             try:
                 self.connect()
-                print(f"Connected to {self.name} FileServer")
+                print("Connected to FileServer")
                 break
             except Exception as e:
-                print(f"Connection to {self.name} FileServer failed: {e}. Retrying in 5 seconds...")
+                print(f"Connection to FileServer failed: {e}. Retrying in 5 seconds...")
                 time.sleep(delay_sec)
 
     def upload(self, local_path: Path, remote_path: Path):

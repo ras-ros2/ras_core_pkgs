@@ -18,9 +18,9 @@ class TransportFileServer(object):
         transport_conf = RasConfigLoader.ras.transport
         file_server = TransportLoader.get_transport(transport_conf.implementation).file_server
         file_conf = transport_conf.file_server
-        if not hasattr(file_conf, self.name):
-            raise Exception(f"FileTransport configuration for {self.name} not found")
-        file_conf : FileTransportCfg = getattr(file_conf, self.name)
+        # if not hasattr(file_conf, self.name):
+        #     raise Exception(f"FileTransport configuration for {self.name} not found")
+        # file_conf : FileTransportCfg = getattr(file_conf, self.name)
         self.file_server = file_server(self.serve_path,file_conf.ip,file_conf.port)
 
     def serve(self):
@@ -42,9 +42,9 @@ class TransportFileClient(object):
         self.name = name
         file_client = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).file_client
         file_conf = RasConfigLoader.ras.transport.file_server
-        if not hasattr(file_conf, self.name):
-            raise Exception(f"FTP configuration for {self.name} not found")
-        file_conf : FileTransportCfg = getattr(file_conf, self.name)
+        # if not hasattr(file_conf, self.name):
+        #     raise Exception(f"FTP configuration for {self.name} not found")
+        # file_conf : FileTransportCfg = getattr(file_conf, self.name)
         self.file_client = file_client(file_conf.ip,file_conf.port)
     
     def connect(self):

@@ -45,6 +45,7 @@ import time
 from ras_bt_framework.managers.BaTMan import BaTMan
 from ras_interfaces.msg import BTNodeStatus
 from pathlib import Path
+from ras_transport.interfaces.TransportWrapper import TransportFileClient
 
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
@@ -52,6 +53,7 @@ class TrajectoryLogger(LifecycleNode):
         my_callback_group = ReentrantCallbackGroup()
 
         self.path_client = self.create_client(SetPath, '/load_path')
+        self.file_client = TransportFileClient("robot")
 
         self.instruction_msg = []
 
@@ -67,6 +69,7 @@ class TrajectoryLogger(LifecycleNode):
 
     def connect_to_aws(self):
         self.remote_bt_server.connect_with_retries()
+        self.file_client.connect_with_retries()
         self.reciever_timer = self.create_timer(0.1, self.timer_callback)
 
     def timer_callback(self):
@@ -86,14 +89,15 @@ class TrajectoryLogger(LifecycleNode):
         extract_path = os.path.join(str(pkg_path), "real_bot_zip")
         Path(extract_path).mkdir(parents=True, exist_ok=True)
 
-        print("Downloading the file using wget...")
-        result = subprocess.run(
-            ["cp", f"{TransportFileServer.serve_path}/xml_directory.zip", f"{extract_path}"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        print("Download completed")
+        self.get_logger().info("Downloading the file using http...")
+        self.file_client.download("xml_directory.zip", f"{extract_path}/xml_directory.zip")
+        # result = subprocess.run(
+        #     ["cp", f"{TransportFileServer.serve_path}/xml_directory.zip", f"{extract_path}"],
+        #     check=True,
+        #     capture_output=True,
+        #     text=True,
+        # )
+        self.get_logger().info("Download completed")
 
         result2 = subprocess.run(
             ["unzip", "-o", f"{extract_path}/xml_directory.zip", "-d", f"{extract_path}"],

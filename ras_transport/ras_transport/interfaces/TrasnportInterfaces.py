@@ -75,11 +75,11 @@ class FileClientInterface(ABC):
         pass
 
     @abstractmethod
-    def upload(self) -> bytes:
+    def upload(self) -> bool:
         pass
     
     @abstractmethod
-    def download(self) -> bytes:
+    def download(self) -> bool:
         pass
 
     @abstractmethod

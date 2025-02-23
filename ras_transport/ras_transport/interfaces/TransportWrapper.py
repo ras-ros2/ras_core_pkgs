@@ -53,11 +53,11 @@ class TransportFileClient(object):
                 print(f"Connection to FileServer failed: {e}. Retrying in 5 seconds...")
                 time.sleep(delay_sec)
 
-    def upload(self, local_path: Path, remote_path: Path):
-        self.file_client.upload(local_path, remote_path)
+    def upload(self, local_path: Path, remote_path: Path) -> bool:
+        return self.file_client.upload(local_path, remote_path)
 
-    def download(self, remote_path: Path, local_path: Path):
-        self.file_client.download(remote_path, local_path)
+    def download(self, remote_path: Path, local_path: Path) -> bool:
+        return self.file_client.download(remote_path, local_path)
     
     def disconnect(self):
         self.file_client.disconnect()

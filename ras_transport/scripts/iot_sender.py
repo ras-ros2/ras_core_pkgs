@@ -85,8 +85,11 @@ class LinkHandler(Node):
         request = SetPath.Request()
         request.path = zip_file_path
 
-        self.file_client.upload(zip_file_path, "xml_directory.zip")
-        return self.remote_bt_client.call("xml_directory.zip")
+        result = self.file_client.upload(zip_file_path, "xml_directory.zip")
+        if result:
+            return self.remote_bt_client.call("xml_directory.zip")
+        else:
+            return json.dumps({"status": False})
 
     def zip_xml_directory(self):
         # Get the directory of the current script

@@ -90,14 +90,20 @@ class TrajectoryLogger(LifecycleNode):
         Path(extract_path).mkdir(parents=True, exist_ok=True)
 
         self.get_logger().info("Downloading the file using http...")
-        self.file_client.download("xml_directory.zip", f"{extract_path}/xml_directory.zip")
+        result = self.file_client.download("xml_directory.zip", f"{extract_path}/xml_directory.zip")
         # result = subprocess.run(
         #     ["cp", f"{TransportFileServer.serve_path}/xml_directory.zip", f"{extract_path}"],
         #     check=True,
         #     capture_output=True,
         #     text=True,
         # )
-        self.get_logger().info("Download completed")
+
+        if result:
+            self.get_logger().info("Download completed")
+        else:
+            self.get_logger().error("Download failed")
+            payload = json.dumps({"status": False})
+            return payload
 
         result2 = subprocess.run(
             ["unzip", "-o", f"{extract_path}/xml_directory.zip", "-d", f"{extract_path}"],

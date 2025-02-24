@@ -296,7 +296,7 @@ class HttpClient(FileClientInterface):
     def is_connected(self) -> bool:
         return self.connected
     
-    def download(self, remote_path: Path, local_path: Path) -> None:
+    def download(self, remote_path: Path, local_path: Path) -> bool:
         if not self.is_connected():
             self.connect()
         response = requests.get(f"{self.server_url}/download/{remote_path}", stream=True)
@@ -305,10 +305,12 @@ class HttpClient(FileClientInterface):
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             print(f"File {remote_path} downloaded successfully to {local_path}")
+            return True
         else:
             print(f"Failed to download file {remote_path}:", response.status_code)
+            return False
         
-    def upload(self, local_path: Path, remote_path: Path) -> None:
+    def upload(self, local_path: Path, remote_path: Path) -> bool:
         if not self.is_connected():
             self.connect()
         local_path = Path(local_path)
@@ -319,8 +321,10 @@ class HttpClient(FileClientInterface):
             response = requests.post(f"{self.server_url}/upload", files=files)
             if response.status_code == 200:
                 print("Upload successful:", response.json())
+                return True
             else:
                 print("Failed to upload file:", response.json())
+                return False
 
     def safe_kill(self) -> None:
         self.disconnect()

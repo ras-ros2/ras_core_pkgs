@@ -1,23 +1,13 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from ras_common.config.loaders.ras_config import RasObject
-import socket
-
-def get_wifi_ip() -> str:
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except:
-        return "0.0.0.0"
+from ras_common.socket_utils import check_if_bindable
 
 def generate_launch_description():
     RasObject.init()
-    file_server_ip: str = RasObject.ras.transport.file_server.ip
-    mqtt_broker_ip: str = RasObject.ras.transport.mqtt.ip
-    device_ip: str = get_wifi_ip()
+    file_srv_cfg = RasObject.ras.transport.file_server
+    mqtt_brkr_cfg = RasObject.ras.transport.mqtt
+    
 
     nodes = [
         Node(
@@ -39,25 +29,34 @@ def generate_launch_description():
             output='screen'
         )
     ]
-    
-    if mqtt_broker_ip in {"localhost", "127.0.0.1", "0.0.0.0", device_ip}:
-        nodes.append(
-            Node(
-                package='ras_transport',
-                executable='file_server.py',
-                name='file_server',
-                output='screen'
+    if not file_srv_cfg.use_external:
+        if check_if_bindable(file_srv_cfg.ip, file_srv_cfg.port):
+            nodes.append(
+                Node(
+                    package='ras_transport',
+                    executable='file_server.py',
+                    name='file_server',
+                    output='screen'
+                )
             )
-        )
-    
-    if file_server_ip in {"localhost", "127.0.0.1", "0.0.0.0", device_ip}:
-        nodes.append(
-             Node(
-                package='ras_transport',
-                executable='mqtt_broker.py',
-                name='mqtt_broker',
-                output='screen'
-            ),
-        )
-    
+        else:
+            print(f"ERROR!!: File server not bindable at {file_srv_cfg.ip}:{file_srv_cfg.port}")
+            exit(1)
+    else:
+        print("INFO: Using external file server")
+    if not mqtt_brkr_cfg.use_external:
+        if check_if_bindable(mqtt_brkr_cfg.ip, mqtt_brkr_cfg.port):
+            nodes.append(
+                Node(
+                    package='ras_transport',
+                    executable='mqtt_broker.py',
+                    name='mqtt_broker',
+                    output='screen'
+                ),
+            )
+        else:
+            print(f"ERROR!!: MQTT broker not bindable at {mqtt_brkr_cfg.ip}:{mqtt_brkr_cfg.port}")
+            exit(1)
+    else:
+        print("INFO: Using external MQTT broker")
     return LaunchDescription(nodes)

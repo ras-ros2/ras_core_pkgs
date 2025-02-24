@@ -12,16 +12,13 @@ CONFIG_FILE = CONFIG_PATH/"ras_conf.yaml"
 class FileTransportCfg(ConfigLoaderBase):
     ip: str
     port: int
-
-# @dataclass
-# class FileTransportsCfg(ConfigLoaderBase):
-#     server : FileTransportCfg
-#     robot : FileTransportCfg
+    use_external: bool = False
 
 @dataclass
 class MQTTConfig(ConfigLoaderBase):
     ip: str
     port: int
+    use_external: bool = False
 
 @dataclass
 class TransportConfig(ConfigLoaderBase):

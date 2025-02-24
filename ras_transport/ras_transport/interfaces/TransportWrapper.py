@@ -47,7 +47,7 @@ class TransportFileClient(object):
         while True:
             try:
                 self.connect()
-                print("Connected to FileServer")
+                print("Connected to FileServer",flush=True)
                 break
             except Exception as e:
                 print(f"Connection to FileServer failed: {e}. Retrying in 5 seconds...")
@@ -82,7 +82,7 @@ class TransportMQTTPublisher(object):
         while True:
             try:
                 self.connect()
-                print("Connected to MQtt Broker")
+                print("Connected to MQtt Broker",flush=True)
                 break
             except Exception as e:
                 print(f"Connection to MQtt Broker failed: {e}. Retrying in 5 seconds...")
@@ -133,7 +133,7 @@ class TransportMQTTSubscriber(object):
         while True:
             try:
                 self.connect()
-                print("Connected to MQtt Broker")
+                print("Connected to MQtt Broker",flush=True)
                 break
             except Exception as e:
                 print(f"Connection to MQtt Broker failed: {e}. Retrying in 5 seconds...")

@@ -100,8 +100,11 @@ class LinkHandler(Node):
         if pkg_path is None:
             return ""
         else:
-            xml_dir_path = os.path.join(pkg_path, "zip")
-            zip_file_path = xml_dir_path+"/xml_directory.zip"
+            xml_dir_path = os.path.join(pkg_path, "xml")
+            zip_dir_path = os.path.join(pkg_path, "zip")
+            if not os.path.exists(zip_dir_path):
+                os.makedirs(zip_dir_path)
+            zip_file_path = zip_dir_path+"/xml_directory.zip"
             with zipfile.ZipFile(zip_file_path, 'w') as zipf:
                 for root, dirs, files in os.walk(xml_dir_path):
                     for file in files:

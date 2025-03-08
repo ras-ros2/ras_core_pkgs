@@ -113,9 +113,10 @@ class LinkHandler(Node):
             with zipfile.ZipFile(zip_file_path, 'w') as zipf:
                 for root, dirs, files in os.walk(xml_dir_path):
                     for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, start=xml_dir_path)
-                        zipf.write(file_path, arcname)
+                        if not file.endswith(".zip"):
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, start=xml_dir_path)
+                            zipf.write(file_path, arcname)
         
             return zip_file_path
 

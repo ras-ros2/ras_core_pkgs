@@ -105,6 +105,9 @@ class LinkHandler(Node):
             if not os.path.exists(zip_dir_path):
                 os.makedirs(zip_dir_path)
             zip_file_path = zip_dir_path+"/xml_directory.zip"
+            if os.path.exists(xml_dir_path+"/xml_directory.zip"):
+                # Remove the existing zip file from previous bugs
+                os.remove(xml_dir_path+"/xml_directory.zip")
             with zipfile.ZipFile(zip_file_path, 'w') as zipf:
                 for root, dirs, files in os.walk(xml_dir_path):
                     for file in files:

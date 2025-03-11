@@ -29,6 +29,7 @@ import time
 from ras_interfaces.action import ExecuteExp
 from std_srvs.srv import SetBool
 from rclpy.action import ActionServer
+from rclpy.action.server import ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import Bool
 from ras_interfaces.msg import Instruction
@@ -68,17 +69,20 @@ class LinkHandler(Node):
         self.remote_bt_client.connect_with_retries()
         self.file_client.connect_with_retries()
 
-    def send_callback(self, goal_handle):
+    def send_callback(self, goal_handle: ServerGoalHandle):
         self.get_logger().info("Starting Real Arm.....")
         zip_file_path = self.zip_xml_directory()
-        pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")  
-        path = os.path.join(str(pkg_path), "xml", "xml_directory.zip")
-        resp: str = self.send_zip_file_path(path)
         result = ExecuteExp.Result()
-        data = json.loads(resp)
-        status = data.get("status")
-        result.success = status
-        goal_handle.succeed()
+        if zip_file_path == "":
+            self.get_logger().error("Zip file not created")
+            result.success = False
+            goal_handle.abort()
+        else:
+            resp: str = self.send_zip_file_path(zip_file_path)
+            data = json.loads(resp)
+            status = data.get("status")
+            result.success = status
+            goal_handle.succeed()
         return result
         
     def send_zip_file_path(self, zip_file_path) -> str:
@@ -92,31 +96,24 @@ class LinkHandler(Node):
             return json.dumps({"status": False})
 
     def zip_xml_directory(self):
-        # Get the directory of the current script
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-
         pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
-
         if pkg_path is None:
-            print("Could not find the package path for ras_bt_framework")
-
             return ""
-        
         else:
-            # Define the path to the xml directory
             xml_dir_path = os.path.join(pkg_path, "xml")
-            
-            # Define the path for the output zip file
-            zip_file_path = xml_dir_path+"/xml_directory.zip"
-            
-            # Create a zip file and add all files in the xml directory to it
+            zip_dir_path = os.path.join(pkg_path, "zip")
+            if not os.path.exists(zip_dir_path):
+                os.makedirs(zip_dir_path)
+            zip_file_path = zip_dir_path+"/xml_directory.zip"
+            if os.path.exists(xml_dir_path+"/xml_directory.zip"):
+                # Remove the existing zip file from previous bugs
+                os.remove(xml_dir_path+"/xml_directory.zip")
             with zipfile.ZipFile(zip_file_path, 'w') as zipf:
                 for root, dirs, files in os.walk(xml_dir_path):
                     for file in files:
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, start=xml_dir_path)
                         zipf.write(file_path, arcname)
-        
             return zip_file_path
 
 def main(args=None):

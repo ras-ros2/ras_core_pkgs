@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="default">
+    <!-- Other world configurations like lights and ground plane -->
+
+    <model name="camera_model">
+        <pose>0 0 1 0 0 0</pose>
+        <link name="camera_link">
+            <pose>0 0 0 0 0 0</pose>
+            <sensor name="camera_sensor" type="camera">
+            <camera>
+                <horizontal_fov>1.047</horizontal_fov> <!-- Field of view in radians -->
+                <image>
+                <width>800</width>   <!-- Image width in pixels -->
+                <height>600</height> <!-- Image height in pixels -->
+                <format>R8G8B8</format> <!-- Image format -->
+                </image>
+                <clip>
+                <near>0.1</near> <!-- Near clipping plane -->
+                <far>100</far>   <!-- Far clipping plane -->
+                </clip>
+            </camera>
+            <always_on>1</always_on>       <!-- Keep the sensor always active -->
+            <update_rate>30</update_rate>  <!-- Update rate in Hz -->
+            <visualize>true</visualize>    <!-- Visualize the camera in the GUI -->
+            <topic>/camera/image</topic>   <!-- ROS topic to publish the image -->
+            </sensor>
+        </link>
+    </model>
+
+  </world>
+</sdf>

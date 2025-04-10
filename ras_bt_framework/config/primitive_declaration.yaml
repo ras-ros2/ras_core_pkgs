@@ -1,0 +1,13 @@
+primitives:
+  trigger:
+    type: base
+    input_ports: 
+      trigger: bool
+    output_ports: 
+      status: bool
+  move2pose:
+    type: trajectory
+    input_ports: 
+      pose: Pose
+    output_ports: 
+      status: bool

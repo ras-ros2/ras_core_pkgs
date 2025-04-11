@@ -93,6 +93,17 @@ class ExperimentsService:
                         i_pre_grasp_offset=0.1
                     )
                     sequence.add_child(pick_module)
+                elif key == "Place":
+                    if value not in self.pose_map:
+                        raise ValueError(f"Invalid pose name for Place: {value}")
+
+                    pose_cfg = self.pose_map[value]
+                    place_module = PlacePrimitive(
+                        i_target_pose=pose_cfg,
+                        i_grasp_frame="grasp",         # Default values as in parser
+                        i_pre_grasp_offset=0.1
+                    )
+                    sequence.add_child(place_module)
 
                 elif key == "gripper":
                     sequence.add_child(gripper(value))

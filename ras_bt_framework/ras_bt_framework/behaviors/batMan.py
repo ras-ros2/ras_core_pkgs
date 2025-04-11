@@ -2,7 +2,7 @@ import os
 import yaml
 from typing import Dict, List, Optional, Tuple
 from ..behavior_template.module import BehaviorModuleSequence
-from ..behaviors.keywords import TargetPoseMap, rotate, gripper, joint_state, Pick
+from ..behaviors.keywords import TargetPoseMap, rotate, gripper, joint_state, Pick, Place
 from ..behaviors.ports import PortPoseCfg
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_common.config.loaders.objects import ObjectTypes
@@ -90,7 +90,7 @@ class BatMan:
                     sequence.add_child(rotate(value))
                 elif key == "joint_state":
                     sequence.add_child(joint_state(value))
-               elif key == "Pick":
+                elif key == "Pick":
                     # Composite action: move to pose and close gripper
                     if isinstance(value, dict):
                         pose_name = value.get("pose")
@@ -99,6 +99,15 @@ class BatMan:
 
                     sequence.add_child(self.pose_map.move2pose_module(pose_name))
                     sequence.add_child(gripper("close"))
+                elif key == "Place":
+                    # Composite action: move to pose and close gripper
+                    if isinstance(value, dict):
+                        pose_name = value.get("pose")
+                    else:
+                        pose_name = value
+
+                    sequence.add_child(self.pose_map.move2pose_module(pose_name))
+                    sequence.add_child(gripper("open"))
                 else:
                     raise ValueError(f"Unknown target action: {key}")
             else:

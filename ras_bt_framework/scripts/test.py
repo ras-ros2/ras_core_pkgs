@@ -34,11 +34,18 @@ def test1():
         keyword2module(gripper, "gripper", True),  # Close gripper
         SaySomething(i_message="Picked object at pose1")
     ])
+    place_sequence = BehaviorModuleSequence()
+    place_sequence.add_children([
+        keyword2module(tpm.move2pose_module, "move2pose", {"pose": "pose1"}),
+        keyword2module(gripper, "gripper", False),  # Close gripper
+        SaySomething(i_message="Placed object at pose1")
+    ])
     myBehavior = BehaviorModuleSequence()
     myBehavior.add_children([
         keyword2module(tpm.move2pose_module,"move2pose",{"pose":"pose1"}),
         keyword2module(tpm.move2pose_module,"Move",{"pose":"pose1"}),
         pick_sequence,
+        place_sequence,
         keyword2module(rotate,"rotate",{"angle":90}),
         keyword2module(gripper,"gripper",True),
         SaySomething(i_message="hello bro"),

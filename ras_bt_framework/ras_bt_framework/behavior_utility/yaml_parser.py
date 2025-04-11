@@ -114,6 +114,13 @@ def read_yaml_to_pose_dict(path):
                     target_pose.append({"gripper": True})
                 else:
                     raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "Place":
+                if value in pose_dict:
+                    # Place is translated to move2pose + open gripper
+                    target_pose.append({"move2pose": value})
+                    target_pose.append({"gripper": False})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
             else:
                 raise KeyError(f"Unknown target action: {key}")
         else:

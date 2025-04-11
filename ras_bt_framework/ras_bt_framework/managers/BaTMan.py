@@ -50,6 +50,7 @@ class BaTMan(Node):
             "move2pose": self.target_pose_map.move2pose_module,
             "Move": self.target_pose_map.move2pose_module,
             "Pick": self.target_pose_map.pick_module,
+            "Place": self.target_pose_map.place_module,
             "rotate": rotate,
             "gripper": gripper,
             "move2pose_sequence": self.target_pose_map.move2pose_sequence_module,

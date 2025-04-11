@@ -48,6 +48,8 @@ class BaTMan(Node):
         self.keyword_module_gen = KeywordModuleGenerator()
         self.keyword_module_gen.register({
             "move2pose": self.target_pose_map.move2pose_module,
+            "Move": self.target_pose_map.move2pose_module,
+            "Pick": self.target_pose_map.pick_module,
             "rotate": rotate,
             "gripper": gripper,
             "move2pose_sequence": self.target_pose_map.move2pose_sequence_module,

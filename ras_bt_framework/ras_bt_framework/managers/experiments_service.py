@@ -14,6 +14,7 @@ from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_CONFIGS_PATH
 import time
 from ..behaviors.modules import BehaviorModuleSequence
+import threading
 
 
 class ExperimentService(Node):
@@ -39,6 +40,8 @@ class ExperimentService(Node):
         self.my_callback_group = ReentrantCallbackGroup()
         self.create_service(SetBool, "/test_experiment", self.sim_step_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/next_step", self.next_step_callback, callback_group=self.my_callback_group)
+        self.create_service(SetBool, "/start_auto_flow", self.start_auto_flow_callback, callback_group=self.my_callback_group)
+        self.create_service(SetBool, "/real_robot_done", self.real_robot_done_callback, callback_group=self.my_callback_group)
         self.counter_reset_client = self.create_client(SetBool, '/reset_counter', callback_group=self.my_callback_group)
         self.create_service(LoadExp, "/get_exepriment", self.load_exp, callback_group=self.my_callback_group)
         self.batman = BaTMan()
@@ -49,6 +52,12 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = 0
         self.sim_complete = False
+        
+        # Threading lock for auto flow
+        self.auto_flow_active = False
+        self.auto_flow_thread = None
+        self.auto_flow_lock = threading.Lock()
+        self.wait_for_real_robot = threading.Event()
 
     def load_exp(self, req, resp):
         """
@@ -75,6 +84,9 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = len(self.target_sequence)
         self.sim_complete = False
+        
+        # Reset auto flow state
+        self.stop_auto_flow()
         
         self.get_logger().info(f"Experiment Loaded with {self.total_steps} steps...")
         resp.success = True
@@ -148,7 +160,7 @@ class ExperimentService(Node):
         try:
             btg.generate_xml_trees(str(real_path))
             self.get_logger().info(f"Real robot trajectory generated at {real_path}")
-            self.get_logger().info("Execute this on the real robot manually, then call the /next_step service to proceed")
+            self.get_logger().info("Execute this on the real robot manually, then call the /real_robot_done service to proceed")
         except Exception as e:
             self.get_logger().error(f"Error generating trajectory for real robot: {e}")
             return False
@@ -180,7 +192,7 @@ class ExperimentService(Node):
             return resp
         
         if self.sim_complete:
-            self.get_logger().info("Simulation for current step already complete. Call /next_step to proceed to next step")
+            self.get_logger().info("Simulation for current step already complete. Call /next_step or /real_robot_done to proceed to next step")
             resp.success = True
             return resp
             
@@ -191,7 +203,10 @@ class ExperimentService(Node):
         if success:
             remaining = self.total_steps - self.current_step_index
             if remaining > 0:
-                self.get_logger().info(f"Simulation successful. Execute this step on the real robot manually, then call /next_step. {remaining} steps remaining")
+                if self.auto_flow_active:
+                    self.get_logger().info(f"Simulation successful. Execute this step on the real robot manually, then call /real_robot_done. {remaining} steps remaining")
+                else:
+                    self.get_logger().info(f"Simulation successful. Execute this step on the real robot manually, then call /next_step. {remaining} steps remaining")
             else:
                 self.get_logger().info("All step simulations completed successfully")
         else:
@@ -226,6 +241,123 @@ class ExperimentService(Node):
             self.get_logger().info("All steps completed successfully")
         else:
             self.get_logger().info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}. Call /test_experiment to simulate this step.")
+            
+        resp.success = True
+        return resp
+    
+    def real_robot_done_callback(self, req, resp):
+        """
+        Signal that the real robot execution is complete and proceed with the next step automatically.
+        
+        Args:
+            req: Service request to signal real robot completion
+            resp: Service response indicating success or failure
+            
+        Returns:
+            The updated service response with success status
+        """
+        self.get_logger().info("Real robot execution completed signal received...")
+        
+        if not self.sim_complete:
+            self.get_logger().info("Current step simulation not complete yet. Run simulation first.")
+            resp.success = False
+            return resp
+        
+        # If in auto mode, signal the waiting thread to continue
+        if self.auto_flow_active:
+            self.wait_for_real_robot.set()
+            resp.success = True
+            return resp
+        else:
+            # Otherwise, just advance to the next step immediately
+            self.current_step_index += 1
+            self.sim_complete = False
+            
+            if self.current_step_index >= self.total_steps:
+                self.get_logger().info("All steps completed successfully")
+            else:
+                self.get_logger().info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}. Call /test_experiment to simulate this step.")
+                
+            resp.success = True
+            return resp
+    
+    def stop_auto_flow(self):
+        """
+        Stop the automated flow if it's running.
+        """
+        with self.auto_flow_lock:
+            self.auto_flow_active = False
+            if self.auto_flow_thread and self.auto_flow_thread.is_alive():
+                self.wait_for_real_robot.set()  # Signal thread to exit if waiting
+                self.auto_flow_thread.join(timeout=1.0)
+            self.auto_flow_thread = None
+            self.wait_for_real_robot.clear()
+    
+    def auto_flow_thread_func(self):
+        """
+        Thread function that handles the automated flow.
+        """
+        self.get_logger().info("Starting automated experiment flow...")
+        
+        while self.auto_flow_active and self.current_step_index < self.total_steps:
+            # Simulate current step if not already simulated
+            if not self.sim_complete:
+                success = self.simulate_current_step()
+                if not success:
+                    self.get_logger().error("Step simulation failed, stopping auto flow")
+                    break
+            
+            # Wait for real robot execution to complete
+            self.get_logger().info(f"Waiting for real robot to complete step {self.current_step_index + 1}...")
+            self.wait_for_real_robot.clear()
+            self.wait_for_real_robot.wait()
+            
+            if not self.auto_flow_active:
+                self.get_logger().info("Auto flow stopped while waiting for real robot")
+                break
+                
+            # Move to next step
+            self.current_step_index += 1
+            self.sim_complete = False
+            
+            if self.current_step_index >= self.total_steps:
+                self.get_logger().info("All steps completed successfully")
+            else:
+                self.get_logger().info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}")
+        
+        with self.auto_flow_lock:
+            self.auto_flow_active = False
+            self.get_logger().info("Automated flow completed or stopped")
+    
+    def start_auto_flow_callback(self, req, resp):
+        """
+        Start the automated flow that will process all steps in sequence.
+        
+        Args:
+            req: Service request to start the automated flow
+            resp: Service response indicating success or failure
+            
+        Returns:
+            The updated service response with success status
+        """
+        self.get_logger().info("Starting automated experiment flow...")
+        
+        if self.target_sequence is None or len(self.target_sequence) == 0:
+            self.get_logger().error("No experiment loaded or empty sequence")
+            resp.success = False
+            return resp
+        
+        with self.auto_flow_lock:
+            if self.auto_flow_active:
+                self.get_logger().info("Automated flow already running")
+                resp.success = True
+                return resp
+                
+            # Start the automated flow in a separate thread
+            self.auto_flow_active = True
+            self.auto_flow_thread = threading.Thread(target=self.auto_flow_thread_func)
+            self.auto_flow_thread.daemon = True
+            self.auto_flow_thread.start()
             
         resp.success = True
         return resp

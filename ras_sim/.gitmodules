@@ -1,0 +1,4 @@
+[submodule "gazebo_models"]
+	path = ras_sim/gazebo_models
+	url = https://github.com/osrf/gazebo_models.git
+	shallow = true

@@ -1,0 +1,11 @@
+- gz_topic_name: "/world/empty/model/xarm_lite6/link/realsense_camera/sensor/realsense_d435/image"
+  ros_topic_name: "/realsense_camera/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "ignition.msgs.Image"
+  direction: IGN_TO_ROS
+
+- gz_topic_name: "/world/empty/model/xarm_lite6/link/realsense_camera/sensor/realsense_d435/depth_image"
+  ros_topic_name: "/realsense_depth_camera/depth_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "ignition.msgs.Image"
+  direction: IGN_TO_ROS

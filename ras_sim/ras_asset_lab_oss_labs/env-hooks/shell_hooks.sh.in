@@ -1,0 +1,2 @@
+ament_prepend_unique_value IGN_GAZEBO_RESOURCE_PATH "share/ras_asset_lab_oss_labs/models"
+

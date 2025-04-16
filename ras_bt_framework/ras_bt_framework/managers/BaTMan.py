@@ -13,6 +13,7 @@ from ras_interfaces.msg import BTNodeStatus
 from pathlib import Path
 import time
 
+
 class BaTMan(Node):
     """
     A ROS2 node for managing behavior tree execution and primitive actions.
@@ -39,8 +40,10 @@ class BaTMan(Node):
         This sets up the necessary clients and generators for behavior tree execution.
         """
         super().__init__("batman")
+      
         self.alfred = PrimitiveActionManager(self)
-        self.get_logger().info("Node Init")
+        # self.logger.log_info("Node Init")
+        
 
         self.manager = BehaviorTreeGenerator(self.alfred)
         self._action_client = ActionClient(self, BTInterface, "bt_executor")

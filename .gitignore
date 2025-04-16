@@ -1,0 +1,22 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*.so
+
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# VSCode settings
+.vscode/
+
+# Python virtual environments
+venv/
+env/
+*.egg-info/
+
+# Misc
+*.swp
+.DS_Store
+

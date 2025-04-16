@@ -48,6 +48,24 @@ class KeywordModuleGenerator(object):
 
     def generate(self,name,keyword_seq:List[Dict[str,dict]]):
         behavior_module : BehaviorModuleSequence= type(name,(BehaviorModuleSequence,),{})()
+        self.generate_into(behavior_module, name, keyword_seq)
+        return behavior_module
+        
+    def generate_into(self, behavior_module: BehaviorModuleSequence, name: str, keyword_seq: List[Dict[str,dict]]):
+        """
+        Generate keyword modules and add them to an existing BehaviorModuleSequence.
+        
+        Args:
+            behavior_module (BehaviorModuleSequence): The existing module sequence to add to
+            name (str): Name of the generated module
+            keyword_seq (List[Dict[str,dict]]): Sequence of keywords to process
+            
+        Returns:
+            BehaviorModuleSequence: The updated behavior module sequence
+            
+        Raises:
+            ValueError: If any of the keywords are invalid or unknown
+        """
         for _kw in keyword_seq:
             identifier = None
             params = None

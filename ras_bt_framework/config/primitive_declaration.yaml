@@ -11,3 +11,23 @@ primitives:
       pose: Pose
     output_ports: 
       status: bool
+  Move:
+      type: trajectory
+      input_ports: 
+        pose: Pose
+      output_ports: 
+        status: bool
+  Pick:
+    type: composite
+    input_ports:
+      pose: Pose
+      trigger: bool
+    output_ports:
+      status: bool
+  Place:
+    type: composite
+    input_ports:
+      pose: Pose
+      trigger: bool
+    output_ports:
+      status: bool

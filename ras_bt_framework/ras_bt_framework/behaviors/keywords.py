@@ -1,5 +1,7 @@
 from ..behavior_template.module import BehaviorModuleSequence
 from ..behaviors.primitives import MoveToPose,RotateEffector,Trigger, MoveToJointState
+from ..behaviors.gen_primitives import Pick as PickPrimitive
+from ..behaviors.gen_primitives import Place as PlacePrimitive
 from ..behaviors.modules import PickSequence,PlaceSequence
 from typing import List,Dict
 from ras_common.config.loaders.objects import ObjectTypes
@@ -65,45 +67,109 @@ class TargetPoseMap(object):
         move2pose_sequence.add_children([self.move2pose_module(pose) for pose in poses])
         return move2pose_sequence
 
-    def pick_module(self,pose:str,clearance:float=0.10,height:float=0.10):
-        """
-        Create a pick sequence module for grasping objects.
+    # def pick_module(self,pose:str,clearance:float=0.10,height:float=0.10):
+    #     """
+    #     Create a pick sequence module for grasping objects.
         
-        Args:
-            pose (str): Name of the pose where the object is located
-            clearance (float, optional): Distance to move before/after picking. Defaults to 0.10.
-            height (float, optional): Height to lift the object. Defaults to 0.10.
+    #     Args:
+    #         pose (str): Name of the pose where the object is located
+    #         clearance (float, optional): Distance to move before/after picking. Defaults to 0.10.
+    #         height (float, optional): Height to lift the object. Defaults to 0.10.
             
-        Returns:
-            PickSequence: Behavior module for picking sequence
+    #     Returns:
+    #         PickSequence: Behavior module for picking sequence
             
-        Raises:
-            ValueError: If pose name is invalid
-        """
-        if pose in self.pose_map:
-            return PickSequence(pose,clearance=clearance,height=height)
-        else:
-            raise ValueError(f"Invalid pose name {pose}")
+    #     Raises:
+    #         ValueError: If pose name is invalid
+    #     """
+    #     if pose in self.pose_map:
+    #         return PickSequence(pose,clearance=clearance,height=height)
+    #     else:
+    #         raise ValueError(f"Invalid pose name {pose}")
     
-    def place_module(self,pose:str,clearance:float=0.10,height:float=0.10):
+    def pick_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
         """
-        Create a place sequence module for releasing objects.
+        Create a pick behavior module. Supports two styles:
+        1. Direct PickPrimitive (old style): give only pose name.
+        2. Sequence style: give name and target_name (used to move to pose and close gripper).
         
         Args:
-            pose (str): Name of the pose where the object should be placed
-            clearance (float, optional): Distance to move before/after placing. Defaults to 0.10.
-            height (float, optional): Height to lower the object. Defaults to 0.10.
-            
+            pose_or_name (str): If target_name is None, treated as pose name for PickPrimitive. 
+                                Otherwise treated as sequence name.
+            target_name (str, optional): Target pose name to move to in the sequence.
+            grasp_frame (str): Grasp frame for PickPrimitive (used only if target_name is None)
+            pre_grasp_offset (float): Pre-grasp offset (used only if target_name is None)
+        
         Returns:
-            PlaceSequence: Behavior module for placing sequence
-            
+            BehaviorModuleSequence or PickPrimitive: Pick behavior module
+        
         Raises:
-            ValueError: If pose name is invalid
+            ValueError: If the pose is invalid
         """
-        if pose in self.pose_map:
-            return PlaceSequence(pose,clearance=clearance,height=height)
+        if target_name is None:
+            # Handle PickPrimitive version
+            if pose_or_name not in self.pose_map:
+                raise ValueError(f"Invalid pose name: {pose_or_name}")
+            pose_cfg = deepcopy(self.pose_map[pose_or_name])
+            return PickPrimitive(i_target_pose=pose_cfg, i_grasp_frame=grasp_frame, i_pre_grasp_offset=pre_grasp_offset)
         else:
-            raise ValueError(f"Invalid pose name {pose}")
+            # Handle sequence version
+            seq = BehaviorModuleSequence(pose_or_name)
+            seq.add_child(self.move2pose_module(target_name))
+            seq.add_child(gripper(True))  # False = close gripper
+            return seq
+
+    # def place_module(self,pose:str,clearance:float=0.10,height:float=0.10):
+    #     """
+    #     Create a place sequence module for releasing objects.
+        
+    #     Args:
+    #         pose (str): Name of the pose where the object should be placed
+    #         clearance (float, optional): Distance to move before/after placing. Defaults to 0.10.
+    #         height (float, optional): Height to lower the object. Defaults to 0.10.
+            
+    #     Returns:
+    #         PlaceSequence: Behavior module for placing sequence
+            
+    #     Raises:
+    #         ValueError: If pose name is invalid
+    #     """
+    #     if pose in self.pose_map:
+    #         return PlaceSequence(pose,clearance=clearance,height=height)
+    #     else:
+    #         raise ValueError(f"Invalid pose name {pose}")
+
+    def place_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
+        """
+        Create a place behavior module. Supports two styles:
+        1. Direct PlacePrimitive (old style): give only pose name.
+        2. Sequence style: give name and target_name (used to move to pose and close gripper).
+        
+        Args:
+            pose_or_name (str): If target_name is None, treated as pose name for PlacePrimitive. 
+                                Otherwise treated as sequence name.
+            target_name (str, optional): Target pose name to move to in the sequence.
+            grasp_frame (str): Grasp frame for PlacePrimitive (used only if target_name is None)
+            pre_grasp_offset (float): Pre-grasp offset (used only if target_name is None)
+        
+        Returns:
+            BehaviorModuleSequence or PlacePrimitive: Place behavior module
+        
+        Raises:
+            ValueError: If the pose is invalid
+        """
+        if target_name is None:
+            # Handle PlacePrimitive version
+            if pose_or_name not in self.pose_map:
+                raise ValueError(f"Invalid pose name: {pose_or_name}")
+            pose_cfg = deepcopy(self.pose_map[pose_or_name])
+            return PlacePrimitive(i_target_pose=pose_cfg, i_grasp_frame=grasp_frame, i_pre_grasp_offset=pre_grasp_offset)
+        else:
+            # Handle sequence version
+            seq = BehaviorModuleSequence(pose_or_name)
+            seq.add_child(self.move2pose_module(target_name))
+            seq.add_child(gripper(False))  # False = close gripper
+            return seq
 
 def rotate(angle:float):
     """
@@ -154,5 +220,5 @@ def joint_state(joints:list):
 keyword_mapping = {
     "rotate": rotate,
     "gripper": gripper,
-    'joint_state': joint_state
+    'joint_state': joint_state,
 }

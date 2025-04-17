@@ -29,7 +29,7 @@ from rclpy.node import Node
 from rclpy.lifecycle import LifecycleNode
 from rclpy.action import ActionClient
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from ras_interfaces.srv import JointSat, LoadExp
+from ras_interfaces.srv import JointSat, LoadExp, StatusLog
 from std_srvs.srv import SetBool
 from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -54,6 +54,9 @@ class TrajectoryLogger(LifecycleNode):
 
         self.path_client = self.create_client(SetPath, '/load_path')
         self.file_client = TransportFileClient()
+        
+        # Create client for the status logging service
+        self.status_client = self.create_client(StatusLog, '/traj_status')
 
         self.instruction_msg = []
 
@@ -121,11 +124,39 @@ class TrajectoryLogger(LifecycleNode):
         if status in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
             self.get_logger().info("Behavior Tree Execution Successful")
             status = True
+            
+            # Call the status logging service
+            self.call_status_log_service('SUCCESS')
         else:
             self.get_logger().info("Behavior Tree Execution Failed")
             status = False
         payload = json.dumps({"status": status}) 
         return payload
+        
+    def call_status_log_service(self, status_value):
+        # Wait for service to be available
+        if not self.status_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warn('Status logging service not available')
+            return
+            
+        # Create and send request
+        request = StatusLog.Request()
+        request.traj_status = status_value
+        request.current_traj = 0  # Default value if not provided
+        request.gripper_status = False  # Default value if not provided
+        
+        future = self.status_client.call_async(request)
+        future.add_done_callback(self.status_log_callback)
+        
+    def status_log_callback(self, future):
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info('Status log service call successful')
+            else:
+                self.get_logger().warn('Status log service call failed')
+        except Exception as e:
+            self.get_logger().error(f'Service call failed: {e}')
 
 def main(args=None):
     rclpy.init(args=args)

@@ -51,6 +51,12 @@ class TrajectoryLogger(LifecycleNode):
         # Initialize the MQTT client
         self.aruco_client = self.create_client(ArucoPoses, "/aruco_poses", callback_group=my_callback_group)
         self.instruction_msg = []
+        
+        # Ensure log directories exist
+        logs_path = Path(RAS_APP_PATH) / "logs"
+        logs_path.mkdir(parents=True, exist_ok=True)
+        (logs_path / "images").mkdir(parents=True, exist_ok=True)
+        
         self.mqtt_sub = TransportMQTTSubscriber("last/will/topic", self.custom_callback)
         self.instruction_flag = True
         self.aruco_sync_flag = True
@@ -74,12 +80,20 @@ class TrajectoryLogger(LifecycleNode):
             return
 
         try:
-            print(f"payload: {self.payload}")
+            print(f"payload: {self.payload[:200]}...")  # Print first 200 chars to avoid flooding logs
             log_data = json.loads(self.payload)
-            log_path = Path(RAS_APP_PATH) / "logs" / "log.txt"
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with log_path.open("a") as file:
-                yaml.dump(log_data, file)
+            print(f"Log data type: {log_data.get('type')}")
+            
+            # Handle image type specially
+            if log_data.get('type') == 'image' and 'image_base64' in log_data:
+                print("Found image type with image_base64, handling image")
+                self._handle_image_log(log_data)
+            else:
+                # Regular log entry - save to log.txt
+                log_path = Path(RAS_APP_PATH) / "logs" / "log.txt"
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a") as file:
+                    yaml.dump(log_data, file)
 
             if self.aruco_sync_flag == False:
                 aruco_pose = ArucoPoses.Request()
@@ -99,14 +113,14 @@ class TrajectoryLogger(LifecycleNode):
                 self.get_logger().info("Spawing Started...")
                 # self.aruco_sync_flag = False
                 
-            if log_data["traj_status"] == "SUCCESS":
+            if log_data.get("traj_status") == "SUCCESS":
                 print("SUCCESS")
                 request = JointSat.Request()
                 request.joint_state.position = log_data["joint_state"]
                 self.future = self.service_sync.call_async(request)
                 rclpy.spin_until_future_complete(self, self.future)
 
-            if log_data["traj_status"] == "FAILED":
+            if log_data.get("traj_status") == "FAILED":
                 print("FAILED")
                 # request = SetBool.Request()
                 # request.data = True
@@ -126,6 +140,67 @@ class TrajectoryLogger(LifecycleNode):
         except Exception as e:
             pass
             self.get_logger().error(f"Error: {e}")
+            
+    def _handle_image_log(self, log_data):
+        """Extract and save image data from log entries with type 'image'"""
+        try:
+            import base64
+            
+            # Create images directory if it doesn't exist
+            images_dir = Path(RAS_APP_PATH) / "logs" / "images"
+            images_dir.mkdir(parents=True, exist_ok=True)
+            
+            print(f"Handling image data with keys: {list(log_data.keys())}")
+            if 'image_base64' not in log_data:
+                print(f"Warning: No image_base64 found in log_data, skipping image processing")
+                return
+                
+            # Extract metadata
+            timestamp = log_data.get('timestamp', self._get_timestamp())
+            description = log_data.get('description', 'image')
+            ext = 'jpg'  # Default extension
+            
+            # Determine file extension from path if available
+            if 'path' in log_data:
+                path = log_data['path']
+                print(f"Image path: {path}")
+                if '.' in path:
+                    ext = path.split('.')[-1]
+            
+            # Create a unique filename
+            image_path = images_dir / f"img_{timestamp}_{description.replace(' ', '_')}.{ext}"
+            print(f"Will save image to: {image_path}")
+            
+            # Decode base64 image and save to file
+            image_data = base64.b64decode(log_data['image_base64'])
+            print(f"Decoded image data length: {len(image_data)} bytes")
+            with open(image_path, 'wb') as f:
+                f.write(image_data)
+                
+            self.get_logger().info(f"Saved image to: {image_path}")
+            
+            # Also log metadata to log.txt
+            log_meta = {
+                'type': 'image_metadata',
+                'timestamp': timestamp,
+                'description': description,
+                'saved_path': str(image_path)
+            }
+            
+            log_path = Path(RAS_APP_PATH) / "logs" / "log.txt"
+            with log_path.open("a") as file:
+                yaml.dump(log_meta, file)
+                
+        except Exception as e:
+            import traceback
+            print(f"Error in _handle_image_log: {e}")
+            print(traceback.format_exc())
+            self.get_logger().error(f"Failed to save image: {e}")
+    
+    def _get_timestamp(self):
+        """Generate a timestamp string"""
+        from datetime import datetime
+        return datetime.now().strftime('%Y%m%d_%H%M%S')
 
 def main(args=None):
     rclpy.init(args=args)

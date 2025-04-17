@@ -184,7 +184,7 @@ class TrajectoryLogger(LifecycleNode):
                 'type': 'image_metadata',
                 'timestamp': timestamp,
                 'description': description,
-                'saved_path': str(image_path)
+                'saved_path': image_path.absolute().as_uri()
             }
             
             log_path = Path(RAS_APP_PATH) / "logs" / "log.txt"

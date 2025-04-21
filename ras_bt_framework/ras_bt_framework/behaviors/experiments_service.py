@@ -7,6 +7,7 @@ from ..behaviors.ports import PortPoseCfg
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_common.config.loaders.objects import ObjectTypes
 from .behavior_utility.yaml_parser import read_yaml_to_pose_dict
+from ..behaviors.gen_primitives import PickPrimitive
 
 class ExperimentsService:
     """
@@ -79,6 +80,31 @@ class ExperimentsService:
                 
                 if key == "move2pose":
                     sequence.add_child(self.pose_map.move2pose_module(value))
+                elif key == "Move":
+                    sequence.add_child(self.pose_map.move2pose_module(value))
+                elif key == "Pick":
+                    if value not in self.pose_map:
+                        raise ValueError(f"Invalid pose name for Pick: {value}")
+
+                    pose_cfg = self.pose_map[value]
+                    pick_module = PickPrimitive(
+                        i_target_pose=pose_cfg,
+                        i_grasp_frame="grasp",         # Default values as in parser
+                        i_pre_grasp_offset=0.1
+                    )
+                    sequence.add_child(pick_module)
+                elif key == "Place":
+                    if value not in self.pose_map:
+                        raise ValueError(f"Invalid pose name for Place: {value}")
+
+                    pose_cfg = self.pose_map[value]
+                    place_module = PlacePrimitive(
+                        i_target_pose=pose_cfg,
+                        i_grasp_frame="grasp",         # Default values as in parser
+                        i_pre_grasp_offset=0.1
+                    )
+                    sequence.add_child(place_module)
+
                 elif key == "gripper":
                     sequence.add_child(gripper(value))
                 elif key == "rotate":

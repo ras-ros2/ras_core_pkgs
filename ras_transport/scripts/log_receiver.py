@@ -83,7 +83,15 @@ class TrajectoryLogger(LifecycleNode):
             print(f"payload: {self.payload[:200]}...")  # Print first 200 chars to avoid flooding logs
             log_data = json.loads(self.payload)
             print(f"Log data type: {log_data.get('type')}")
-            
+
+            # Extract and print image filename for IoT receiver
+            image_filename = log_data.get("image_filename")
+            if image_filename:
+                self.get_logger().info(f"Received image filename from MQTT: {image_filename}")
+                # TODO: Add IoT receiver logic here to download the image using this filename
+            else:
+                self.get_logger().warn("No image filename found in this message.")
+
             # Handle image type specially
             if log_data.get('type') == 'image' and 'image_base64' in log_data:
                 print("Found image type with image_base64, handling image")

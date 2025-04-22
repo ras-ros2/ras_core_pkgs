@@ -82,6 +82,20 @@ class TrajectoryLogger(LifecycleNode):
         self.payload =  message.decode("utf-8")
         self.get_logger().info("Received Message")
 
+        # Extract image filename from payload (if present)
+        try:
+            payload_json = json.loads(self.payload)
+            image_filename = payload_json.get("image_filename")
+            if image_filename:
+                self.get_logger().info(f"Attempting to download image file: {image_filename}")
+                img_result = self.file_client.download(image_filename, f"/tmp/{image_filename}")
+                if img_result:
+                    self.get_logger().info(f"Successfully downloaded image: /tmp/{image_filename}")
+                else:
+                    self.get_logger().warn(f"Failed to download image: {image_filename}")
+        except Exception as e:
+            self.get_logger().warn(f"Could not parse payload for image filename: {e}")
+
         pkg_path = get_cmake_python_pkg_source_dir("ras_transport")
         if not pkg_path:
             self.get_logger().error("Unable to find the package path")

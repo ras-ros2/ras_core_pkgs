@@ -92,19 +92,18 @@ class ArmLogger(LifecycleNode):
     
     def status_callback(self, request, response):
         self.trajlog = {
-            "joint_state" : self.joint_list,
-            "traj_status" : request.traj_status,
-            "gripper_status" : request.gripper_status,
-            "current_traj" : request.current_traj,
-            "aruco_markers" : self.aruco_data
+            "joint_state": self.joint_list,
+            "traj_status": request.traj_status,
+            "gripper_status": request.gripper_status,
+            "current_traj": request.current_traj,
+            "aruco_markers": self.aruco_data,
+            # Include the image filename in the payload
+            "image_filename": request.image_filename
         }
-        
         payload = json.dumps(self.trajlog)
         print(f"publishing logging data: {self.trajlog}")
         self.mqtt_pub.publish(payload)
-        
         response.success = True
-
         return response
 
 def main():

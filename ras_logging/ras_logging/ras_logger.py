@@ -68,7 +68,12 @@ class RasLogger:
         logger.info(f"file://{abs_path_fwd}")
         logger.info(f"Image can be found at {abs_path_fwd}")
 
+    def log_warn(self, message: str):
+        logger.warning(message)
 
+    def log_debug(self, message: str):
+        logger.debug(message)
+        
     def _now(self):
         return datetime.now().strftime('%Y%m%d_%H%M%S')
 

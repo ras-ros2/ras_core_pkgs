@@ -31,6 +31,8 @@ from builtin_interfaces.msg import Duration
 # from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_transport.interfaces.TransportWrapper import TransportMQTTSubscriber
+from ras_transport.interfaces.TransportWrapper import TransportFileClient
+from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_APP_PATH
 from geometry_msgs.msg import Pose, Point, Quaternion
 import os
@@ -51,6 +53,7 @@ class TrajectoryLogger(LifecycleNode):
         # Initialize the MQTT client
         self.aruco_client = self.create_client(ArucoPoses, "/aruco_poses", callback_group=my_callback_group)
         self.instruction_msg = []
+        self.file_client = TransportFileClient()
         
         # Ensure log directories exist
         logs_path = Path(RAS_APP_PATH) / "logs"
@@ -85,10 +88,18 @@ class TrajectoryLogger(LifecycleNode):
             print(f"Log data type: {log_data.get('type')}")
 
             # Extract and print image filename for IoT receiver
+            pkg_path = get_cmake_python_pkg_source_dir("ras_app_main")
+            extract_path = os.path.join(str(pkg_path), "../../../image_logs")
+            Path(extract_path).mkdir(parents=True, exist_ok=True)
             image_filename = log_data.get("image_filename")
             if image_filename:
                 self.get_logger().info(f"Received image filename from MQTT: {image_filename}")
-                # TODO: Add IoT receiver logic here to download the image using this filename
+                # Download the image file using the file client
+                img_result = self.file_client.download(image_filename, f"{extract_path}/{image_filename}")
+                if img_result:
+                    self.get_logger().info(f"Successfully downloaded image: {extract_path}/{image_filename}")
+                else:
+                    self.get_logger().warn(f"Failed to download image: {image_filename}")
             else:
                 self.get_logger().warn("No image filename found in this message.")
 

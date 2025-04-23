@@ -1,4 +1,5 @@
 import os
+import yaml
 from ras_bt_framework.behavior_utility.yaml_parser import read_yaml_to_pose_dict
 from ras_bt_framework.behavior_utility.update_bt import update_xml, update_bt
 import xml.etree.ElementTree as ET
@@ -391,6 +392,12 @@ class ExperimentService(Node):
             self.logger.log_error("Experiment Not Found")
             resp.success = False
             return resp
+        
+        # Save the current experiment ID to a file for log_receiver to access
+        current_exp_path = os.path.join(RAS_CONFIGS_PATH, "current_experiment.txt")
+        with open(current_exp_path, 'w') as f:
+            f.write(exp_id)
+        self.logger.log_info(f"Saved current experiment ID {exp_id} to {current_exp_path}")
         
         self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
         self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)

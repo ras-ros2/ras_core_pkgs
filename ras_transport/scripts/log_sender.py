@@ -35,14 +35,14 @@ from ras_interfaces.srv import StatusLog
 from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
 from aruco_interfaces.msg import ArucoMarkers
 from rclpy_message_converter import json_message_converter
-
-
+from ras_logging.ras_logger import RasLogger
 
 class ArmLogger(LifecycleNode):
     def __init__(self):
         super().__init__("arm_logger")
+        self.logger = RasLogger()
 
-        self.get_logger().info('NODE STARTED')
+        self.logger.log_info('NODE STARTED')
 
         self.mqtt_pub = TransportMQTTPublisher("last/will/topic")
         self.connect_to_aws()

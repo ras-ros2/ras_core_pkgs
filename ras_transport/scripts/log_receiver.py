@@ -40,11 +40,13 @@ import json
 import yaml
 from pathlib import Path
 import time
+from ras_logging.ras_logger import RasLogger
 
 
 class TrajectoryLogger(LifecycleNode):
     def __init__(self):
         super().__init__('trajectory_logger')
+        self.logger = RasLogger()
 
         my_callback_group = ReentrantCallbackGroup()
         self.publisher_ = self.create_publisher(JointTrajectory, 'trajectory_topic', 10)
@@ -73,19 +75,19 @@ class TrajectoryLogger(LifecycleNode):
         self.mqtt_sub.connect_with_retries()
 
     def custom_callback(self, message):
-        print(f"message is {message} and type is {type(message)}")
+        self.logger.log_info(f"message is {message} and type is {type(message)}")
         self.payload =  message.decode("utf-8")
-        print(f"now type is {type(self.payload)}")
-        self.get_logger().info("Received Message")
+        self.logger.log_info(f"now type is {type(self.payload)}")
+        self.logger.log_info("Received Message")
 
         if not self.payload:
-            self.get_logger().info("Received an empty payload.")
+            self.logger.log_info("Received an empty payload.")
             return
 
         try:
-            print(f"payload: {self.payload[:200]}...")  # Print first 200 chars to avoid flooding logs
+            self.logger.log_info(f"payload: {self.payload[:200]}...")  # Print first 200 chars to avoid flooding logs
             log_data = json.loads(self.payload)
-            print(f"Log data type: {log_data.get('type')}")
+            self.logger.log_info(f"Log data type: {log_data.get('type')}")
 
             # Extract and print image filename for IoT receiver
             pkg_path = get_cmake_python_pkg_source_dir("ras_app_main")
@@ -93,19 +95,19 @@ class TrajectoryLogger(LifecycleNode):
             Path(extract_path).mkdir(parents=True, exist_ok=True)
             image_filename = log_data.get("image_filename")
             if image_filename:
-                self.get_logger().info(f"Received image filename from MQTT: {image_filename}")
+                self.logger.log_info(f"Received image filename from MQTT: {image_filename}")
                 # Download the image file using the file client
                 img_result = self.file_client.download(image_filename, f"{extract_path}/{image_filename}")
                 if img_result:
-                    self.get_logger().info(f"Successfully downloaded image: {extract_path}/{image_filename}")
+                    self.logger.log_info(f"Successfully downloaded image: {extract_path}/{image_filename}")
                 else:
-                    self.get_logger().warn(f"Failed to download image: {image_filename}")
+                    self.logger.log_warn(f"Failed to download image: {image_filename}")
             else:
-                self.get_logger().warn("No image filename found in this message.")
+                self.logger.log_warn("No image filename found in this message.")
 
             # Handle image type specially
             if log_data.get('type') == 'image' and 'image_base64' in log_data:
-                print("Found image type with image_base64, handling image")
+                self.logger.log_info("Found image type with image_base64, handling image")
                 self._handle_image_log(log_data)
             else:
                 # Regular log entry - save to log.txt
@@ -129,18 +131,18 @@ class TrajectoryLogger(LifecycleNode):
                 ]
                 
                 self.aruco_client.call_async(aruco_pose)
-                self.get_logger().info("Spawing Started...")
+                self.logger.log_info("Spawing Started...")
                 # self.aruco_sync_flag = False
                 
             if log_data.get("traj_status") == "SUCCESS":
-                print("SUCCESS")
+                self.logger.log_info("SUCCESS")
                 request = JointSat.Request()
                 request.joint_state.position = log_data["joint_state"]
                 self.future = self.service_sync.call_async(request)
                 rclpy.spin_until_future_complete(self, self.future)
 
             if log_data.get("traj_status") == "FAILED":
-                print("FAILED")
+                self.logger.log_info("FAILED")
                 # request = SetBool.Request()
                 # request.data = True
                 # self.future = self.service_.call_async(request)
@@ -152,13 +154,12 @@ class TrajectoryLogger(LifecycleNode):
 
         except json.JSONDecodeError as e:
             pass
-            # self.get_logger().error(f"JSONDecodeError: {e}")
+            # self.logger.log_error(f"JSONDecodeError: {e}")
         except KeyError as e:
             pass
-            # self.get_logger().error(f"KeyError: {e}")
+            # self.logger.log_error(f"KeyError: {e}")
         except Exception as e:
-            pass
-            self.get_logger().error(f"Error: {e}")
+            self.logger.log_error(f"Error: {e}", e)
             
     def _handle_image_log(self, log_data):
         """Extract and save image data from log entries with type 'image'"""
@@ -169,9 +170,9 @@ class TrajectoryLogger(LifecycleNode):
             images_dir = Path(RAS_APP_PATH) / "logs" / "images"
             images_dir.mkdir(parents=True, exist_ok=True)
             
-            print(f"Handling image data with keys: {list(log_data.keys())}")
+            self.logger.log_info(f"Handling image data with keys: {list(log_data.keys())}")
             if 'image_base64' not in log_data:
-                print(f"Warning: No image_base64 found in log_data, skipping image processing")
+                self.logger.log_warn(f"Warning: No image_base64 found in log_data, skipping image processing")
                 return
                 
             # Extract metadata
@@ -188,15 +189,15 @@ class TrajectoryLogger(LifecycleNode):
             
             # Create a unique filename
             image_path = images_dir / f"img_{timestamp}_{description.replace(' ', '_')}.{ext}"
-            print(f"Will save image to: {image_path}")
+            self.logger.log_info(f"Will save image to: {image_path}")
             
             # Decode base64 image and save to file
             image_data = base64.b64decode(log_data['image_base64'])
-            print(f"Decoded image data length: {len(image_data)} bytes")
+            self.logger.log_info(f"Decoded image data length: {len(image_data)} bytes")
             with open(image_path, 'wb') as f:
                 f.write(image_data)
                 
-            self.get_logger().info(f"Saved image to: {image_path}")
+            self.logger.log_info(f"Saved image to: {image_path}")
             
             # Also log metadata to log.txt
             log_meta = {
@@ -234,7 +235,7 @@ def main(args=None):
         # Cleanup and disconnect
         receiver.destroy_node()
         receiver.mqtt_sub.disconnect()
-        receiver.get_logger().info("Disconnected from AWS IoT")
+        receiver.logger.log_info("Disconnected from AWS IoT")
         rclpy.shutdown()
 
 if __name__ == '__main__':

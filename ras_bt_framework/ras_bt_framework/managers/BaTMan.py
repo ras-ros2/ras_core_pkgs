@@ -12,6 +12,7 @@ from ras_interfaces.srv import PrimitiveExec
 from ras_interfaces.msg import BTNodeStatus
 from pathlib import Path
 import time
+from ras_logging.ras_logger import RasLogger
 
 
 class BaTMan(Node):
@@ -40,9 +41,9 @@ class BaTMan(Node):
         This sets up the necessary clients and generators for behavior tree execution.
         """
         super().__init__("batman")
-      
+        self.logger = RasLogger()
         self.alfred = PrimitiveActionManager(self)
-        self.get_logger().info("Node Init")
+        self.logger.log_info("Node Init")
        
 
         
@@ -99,9 +100,9 @@ class BaTMan(Node):
         """
         goal_handle: ClientGoalHandle = future.result()
         if not goal_handle.accepted:
-            self.get_logger().info('Goal rejected :(')
+            self.logger.log_info('Goal rejected :(')
             return
-        self.get_logger().info('Goal accepted :)')
+        self.logger.log_info('Goal accepted :)')
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
         self.session_started = True
@@ -114,7 +115,7 @@ class BaTMan(Node):
             future (rclpy.Future): Future object containing the execution result.
         """
         result: BTInterface.Result = future.result()
-        self.get_logger().info('Result: {0}'.format(result.status))
+        self.logger.log_info('Result: {0}'.format(result.status))
     
     def feedback_callback(self, feedback_msg):
         """
@@ -124,7 +125,7 @@ class BaTMan(Node):
             feedback_msg: Feedback message from the action server.
         """
         feedback: BTInterface.Feedback = feedback_msg.feedback
-        self.get_logger().info('Received feedback: {0} {1}'.format(feedback.status, feedback.behavior_stack))
+        self.logger.log_info('Received feedback: {0} {1}'.format(feedback.status, feedback.behavior_stack))
     
     def tick_loop(self):
         """
@@ -137,7 +138,7 @@ class BaTMan(Node):
         status = BTNodeStatus.IDLE
         while rclpy.ok():
             if status == BTNodeStatus.IDLE:
-                self.get_logger().info("Sending tick")
+                self.logger.log_info("Sending tick")
                 future = self.tick_cli.call_async(req)
                 rclpy.spin_until_future_complete(self, future)
                 resp: PrimitiveExec.Response = future.result()
@@ -160,7 +161,7 @@ class BaTMan(Node):
             int: Final execution status of the behavior tree.
         """
         bt_path = str(bt_path)
-        self.get_logger().info("Executing BT at path: {0}".format(bt_path))
+        self.logger.log_info("Executing BT at path: {0}".format(bt_path))
         self.send_goal(bt_path)
         time.sleep(2)
         return self.tick_loop()

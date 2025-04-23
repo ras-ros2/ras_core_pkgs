@@ -8,7 +8,7 @@ from pathlib import Path
 class Colors:
     RESET = "\033[0m"
     INFO = "\033[38;5;110m"
-    WARNING = "\033[38;5;178m"
+    WARNING = "\033[38;5;226m"
     ERROR = "\033[38;5;174m"
     DEBUG = "\033[38;5;240m"
     CRITICAL = "\033[38;5;162m"

@@ -18,11 +18,12 @@ import json
 # from connection_helper import ConnectionHelper
 from ras_interfaces.srv import SetPath
 from ras_interfaces.action import ExecuteExp
-from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher,TransportMQTTSubscriber, TransportServiceClient
+from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher, TransportMQTTSubscriber, TransportServiceClient
 from ras_transport.interfaces.TransportWrapper import TransportFileClient
 import os
 import zipfile
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
+from ras_logging.ras_logger import RasLogger
 
 # Set APP_TYPE
 APP_TYPE = os.environ.get("APP_TYPE", "server")  # fallback default
@@ -33,6 +34,7 @@ class LinkHandler(Node):
 
     def __init__(self):
         super().__init__('link_sender')
+        self.logger = RasLogger()
 
         my_callback_group = ReentrantCallbackGroup()
 
@@ -68,7 +70,7 @@ class LinkHandler(Node):
 
 
     def send_callback(self, goal_handle):
-        self.get_logger().info("Starting Real Arm.....")
+        self.logger.log_info("Starting Real Arm.....")
 
         if APP_TYPE == "server":
             zip_file_path = self.zip_xml_directory()
@@ -79,7 +81,7 @@ class LinkHandler(Node):
         result = ExecuteExp.Result()
 
         if not zip_file_path or not os.path.exists(zip_file_path):
-            self.get_logger().error("Zip file not found or created")
+            self.logger.log_error("Zip file not found or created")
             result.success = False
             if APP_TYPE == "server":
                 goal_handle.abort()
@@ -127,7 +129,7 @@ class LinkHandler(Node):
         pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
 
         if pkg_path is None:
-            self.get_logger().error("Could not find the package path for ras_bt_framework")
+            self.logger.log_error("Could not find the package path for ras_bt_framework")
             return ""
 
         xml_dir_path = os.path.join(pkg_path, "xml")
@@ -173,7 +175,7 @@ def main(args=None):
     finally:
         # Cleanup and disconnect
         node.destroy_node()
-        node.get_logger().info("Disconnected from AWS IoT")
+        node.logger.log_info("Disconnected from AWS IoT")
         rclpy.shutdown()
 
 if __name__ == '__main__':

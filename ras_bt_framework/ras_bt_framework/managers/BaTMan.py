@@ -44,6 +44,7 @@ class BaTMan(Node):
         self.alfred = PrimitiveActionManager(self)
         self.get_logger().info("Node Init")
        
+
         
 
         self.manager = BehaviorTreeGenerator(self.alfred)

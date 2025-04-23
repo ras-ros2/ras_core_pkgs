@@ -42,8 +42,9 @@ class BaTMan(Node):
         super().__init__("batman")
       
         self.alfred = PrimitiveActionManager(self)
-        # self.logger.log_info("Node Init")
         self.get_logger().info("Node Init")
+       
+        
 
         self.manager = BehaviorTreeGenerator(self.alfred)
         self._action_client = ActionClient(self, BTInterface, "bt_executor")

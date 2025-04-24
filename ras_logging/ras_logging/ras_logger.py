@@ -32,14 +32,14 @@ class RasLogger:
 
     def log_info(self, message: str):
         """Log an info message."""
-        logger.info(message)
+        logger.info(message, stacklevel=2)
 
     def log_error(self, message: str, exc: Exception = None):
         """Log an error message and optional exception."""
         full_msg = message
         if exc:
             full_msg += f"\nException: {repr(exc)}"
-        logger.error(full_msg)
+        logger.error(full_msg, stacklevel=2)
 
     def log_json(self, data: Any, description: str = ""):
         """Log JSON data to a local file only."""
@@ -47,7 +47,7 @@ class RasLogger:
         fname = self.base_log_dir / 'json' / f'log_{ts}.json'
         with open(fname, 'w') as f:
             json.dump(data, f)
-        logger.info(f"JSON logged: {fname} {description}")
+        logger.info(f"JSON logged: {fname} {description}", stacklevel=2)
 
     def log_image(self, image_bytes: bytes, description: str = "", ext: str = "jpg"):
         """Log image bytes to file."""
@@ -63,54 +63,16 @@ class RasLogger:
             f.write(image_bytes)
         abs_path = os.path.abspath(img_path)
         abs_path_fwd = abs_path.replace('\\', '/')
-        logger.info(f"Image logged: {img_path} {description}")
-        logger.info(f"[IMAGE] {abs_path_fwd}")
-        logger.info(f"file://{abs_path_fwd}")
-        logger.info(f"Image can be found at {abs_path_fwd}")
+        logger.info(f"Image logged: {img_path} {description}", stacklevel=2)
+        logger.info(f"[IMAGE] {abs_path_fwd}", stacklevel=2)
+        logger.info(f"file://{abs_path_fwd}", stacklevel=2)
+        logger.info(f"Image can be found at {abs_path_fwd}", stacklevel=2)
 
     def log_warn(self, message: str):
-        logger.warning(message)
+        logger.warning(message, stacklevel=2)
 
     def log_debug(self, message: str):
-        logger.debug(message)
+        logger.debug(message, stacklevel=2)
         
     def _now(self):
         return datetime.now().strftime('%Y%m%d_%H%M%S')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Example usage:
-# logger = RasLogger()
-# logger.log_info("Robot started")
-# logger.log_json({"state": "idle"}, "Current robot state")
-# logger.log_image(img_bytes, "Camera snapshot")
-# try:
-#     risky_operation()
-# except Exception as e:
-#     logger.log_error("Operation failed", e)

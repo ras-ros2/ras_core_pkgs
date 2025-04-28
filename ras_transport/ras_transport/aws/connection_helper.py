@@ -23,23 +23,24 @@ import time
 from awscrt import io
 from awsiot import mqtt_connection_builder
 from awsiot.greengrass_discovery import DiscoveryClient
+from ras_logging.ras_logger import RasLogger
 
 class ConnectionHelper:
     def __init__(self, logger, path_for_config="", discover_endpoints=False):
         self.path_for_config = path_for_config
         self.discover_endpoints=discover_endpoints
-        self.logger = logger
+        self.logger = RasLogger()
 
         with open(path_for_config) as f:
           cert_data = json.load(f)
 
-        self.logger.info("Config we are loading is :\n{}".format(cert_data))
+        self.logger.log_info("Config we are loading is :\n{}".format(cert_data))
 
         if discover_endpoints:
-            self.logger.info("Discovering endpoints for connection")
+            self.logger.log_info("Discovering endpoints for connection")
             self.connect_using_discovery(cert_data)
         else:
-            self.logger.info("Connecting directly to endpoint")
+            self.logger.log_info("Connecting directly to endpoint")
             self.connect_to_endpoint(cert_data)
 
     def connect_to_endpoint(self, cert_data):
@@ -54,7 +55,7 @@ class ConnectionHelper:
         )
         connected_future = self.mqtt_conn.connect()
         connected_future.result()
-        self.logger.info("Connected!")
+        self.logger.log_info("Connected!")
 
     def connect_using_discovery(self, cert_data):
         tries = 0
@@ -81,7 +82,7 @@ class ConnectionHelper:
         self.logger.debug(f"Discovery response is: {discover_response}")
 
         for tries in range(retry_attempts):
-            self.logger.info(f"Connection attempt: {tries}")
+            self.logger.log_info(f"Connection attempt: {tries}")
             for gg_group in discover_response.gg_groups:
                 for gg_core in gg_group.cores:
                     for connectivity_info in gg_core.connectivity:
@@ -118,5 +119,5 @@ class ConnectionHelper:
         )
         connect_future = conn.connect()
         connect_future.result()
-        self.logger.info("Connected!")
+        self.logger.log_info("Connected!")
         return conn

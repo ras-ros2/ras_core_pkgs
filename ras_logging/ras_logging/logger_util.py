@@ -4,7 +4,6 @@ from logging.handlers import RotatingFileHandler
 import json
 from datetime import datetime
 from pathlib import Path
-
 class Colors:
     RESET = "\033[0m"
     INFO = "\033[38;5;110m"
@@ -12,13 +11,12 @@ class Colors:
     ERROR = "\033[38;5;174m"
     DEBUG = "\033[38;5;240m"
     CRITICAL = "\033[38;5;162m"
-
 class CustomFormatter(logging.Formatter):
     def __init__(self, fmt, datefmt, use_colors=True):
         super().__init__(fmt, datefmt)
         self.use_colors = use_colors
-
     def format(self, record):
+        # Pretty-print dicts/lists
         if isinstance(record.msg, (dict, list)):
             record.msg = json.dumps(record.msg, indent=2)
         try:
@@ -26,12 +24,20 @@ class CustomFormatter(logging.Formatter):
         except ValueError:
             relative_path = record.pathname
         record.file_info = f"{relative_path}:{record.lineno}"
+        # Only colorize for console, never for file
         if self.use_colors:
             color_code = getattr(Colors, record.levelname, Colors.RESET)
             record.levelname = f"{color_code}{record.levelname}{Colors.RESET}"
-            record.msg = f"{color_code}{record.msg}{Colors.RESET}"
+            # Only color the message if not already colored
+            if not (str(record.msg).startswith(color_code) and str(record.msg).endswith(Colors.RESET)):
+                record.msg = f"{color_code}{record.msg}{Colors.RESET}"
+        else:
+            # Remove any color codes from levelname and msg for file output
+            import re
+            ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+            record.levelname = ansi_escape.sub('', str(record.levelname))
+            record.msg = ansi_escape.sub('', str(record.msg))
         return super().format(record)
-
 def setup_logger(name: str = "app_logger"):
     Path("logs").mkdir(exist_ok=True)
     logger = logging.getLogger(name)
@@ -55,5 +61,4 @@ def setup_logger(name: str = "app_logger"):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     return logger
-
 logger = setup_logger()

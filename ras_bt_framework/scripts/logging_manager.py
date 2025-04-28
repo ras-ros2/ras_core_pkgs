@@ -5,12 +5,14 @@ from ras_interfaces.srv import GripperLog, TrajLog, StatusLog
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_srvs.srv import Empty
 from rclpy.node import Node
+from ras_logging.ras_logger import RasLogger
 
 class LoggingManager(Node):
     def __init__(self):
         super().__init__("logging_manager")
+        self.logger = RasLogger()
 
-        self.get_logger().info("LOGGING MANAGER_STARTED")
+        self.logger.log_info("LOGGING MANAGER_STARTED")
         self.my_callback_group = ReentrantCallbackGroup()
 
         self.current_traj = 0
@@ -26,7 +28,7 @@ class LoggingManager(Node):
 
     def update_traj_status(self, req, resp):
 
-        self.get_logger().info("Trajectory Status Updated")
+        self.logger.log_info("Trajectory Status Updated")
 
         self.current_traj = req.current_traj
         self.traj_status = req.traj_status
@@ -37,7 +39,7 @@ class LoggingManager(Node):
     
     def update_gripper_status(self, req, resp):
 
-        self.get_logger().info("Gripper Status Updated")
+        self.logger.log_info("Gripper Status Updated")
 
         self.gripper_status = req.gripper_status
         
@@ -47,7 +49,7 @@ class LoggingManager(Node):
 
     def start_logging(self, req, resp):
 
-        self.get_logger().info("Status Send to LOG SENDER")
+        self.logger.log_info("Status Send to LOG SENDER")
 
         log_data = StatusLog.Request()
         log_data.traj_status = self.traj_status

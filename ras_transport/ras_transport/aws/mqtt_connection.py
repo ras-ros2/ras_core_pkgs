@@ -27,11 +27,12 @@ import time
 from awscrt import io,mqtt
 from awsiot import mqtt_connection_builder
 from os import path
+from ras_logging.ras_logger import RasLogger
 
 class MqttConn(object):
     def __init__(self,rcl_node: rclpy.node,config_path:str=None):
         self.mqtt_conn = None
-        self.logger = rcl_node.get_logger()
+        self.logger = RasLogger()
         self.is_connected = False
 
         if isinstance(config_path,type(None)):
@@ -50,7 +51,7 @@ class MqttConn(object):
 
     def connect_ep(self,force=False):
         if self.is_connected and not force:
-            self.logger.info("Already connected. Skipping.")
+            self.logger.log_info("Already connected. Skipping.")
             return
         self.mqtt_conn = mqtt_connection_builder.mtls_from_path(
             endpoint=self.config["endpoint"],
@@ -64,7 +65,7 @@ class MqttConn(object):
         connection_future = self.mqtt_conn.connect()
         res = connection_future.result()
         self.is_connected = True
-        self.logger.info("Successfully connected.")
+        self.logger.log_info("Successfully connected.")
     
     def set_last_will(self,topic:str,msg:str,qos=mqtt.QoS.AT_LEAST_ONCE):
         if not self.is_connected:
@@ -79,7 +80,7 @@ class MqttConn(object):
         if self.is_connected:
             disconnect_future = self.mqtt_conn.disconnect()
             res = disconnect_future.result()
-            self.logger.info("Successfully disconnected.")
+            self.logger.log_info("Successfully disconnected.")
     
     def publish(self,topic,payload,qos=mqtt.QoS.AT_LEAST_ONCE,delay=0.25,wait=False,retry=False):
         if not self.is_connected:
@@ -87,7 +88,7 @@ class MqttConn(object):
         
         
         def _publish():
-            self.logger.info(f"Publishing to {topic}")
+            self.logger.log_info(f"Publishing to {topic}")
             pub_future,id = self.mqtt_conn.publish(
                 topic=topic,
                 payload=payload,
@@ -103,7 +104,7 @@ class MqttConn(object):
                     _publish()
                     break
                 except Exception as e:
-                    self.logger.error(f"Publish failed: {e}. Retrying in {delay} seconds...")
+                    self.logger.log_error(f"Publish failed: {e}. Retrying in {delay} seconds...")
                     time.sleep(delay)
                     self.connect_ep(force=True)
         else:

@@ -27,7 +27,7 @@ from enum import Enum
 from std_srvs.srv import SetBool
 import json
 import time
-
+from ras_logging.ras_logger import RasLogger
 class TransportCommands(Enum):
     HOME = "home"
     SYNC = "sync"
@@ -35,6 +35,7 @@ class TransportCommands(Enum):
 class TransportRobotService(Node):
     def __init__(self):
         super().__init__('transport_robot_service')
+        self.logger = RasLogger()
         self.server_transport_server = TransportServiceServer("server_transport", self.execute_request)
         
         self.sync_robot_client = TransportServiceClient("sync_robot")
@@ -70,47 +71,47 @@ class TransportRobotService(Node):
     def execute_request(self, message):
         payload = message.decode("utf-8")
         if payload == TransportCommands.HOME.value:
-            self.get_logger().info("Executing Home command")
+            self.logger.log_info("Executing Home command")
             req : JointReq.Request = JointReq.Request()
             LabSetup.init()
             home_joint_state: Dict[str, float|int] = LabSetup.conf.robot.home_joint_state
             req.joints.header.stamp = self.get_clock().now().to_msg()
             req.joints.name = list(home_joint_state.keys())
             req.joints.position = [float(value) for value in home_joint_state.values()]
-            self.get_logger().info(f"Home joint state: {home_joint_state}")
+            self.logger.log_info(f"Home joint state: {home_joint_state}")
             client = self.create_client(JointReq, '/move_to_joint_states')
             while not client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().info('Service not available, waiting again...')
+                self.logger.log_info('Service not available, waiting again...')
             future = client.call_async(req)
             rclpy.spin_until_future_complete(self, future)
             if future.result() is not None:
                 response: JointReq.Response = future.result()
                 if response.success:
-                    self.get_logger().info("Home position reached successfully")
+                    self.logger.log_info("Home position reached successfully")
                     self.execute_request(TransportCommands.SYNC.value.encode("utf-8"))
                 else:
-                    self.get_logger().info("Home position doesn't reached")
+                    self.logger.log_info("Home position doesn't reached")
             else:
-                self.get_logger().error(f"Service call failed: {future.exception()}")
+                self.logger.log_error(f"Service call failed: {future.exception()}")
         elif payload == TransportCommands.SYNC.value:
-            self.get_logger().info("Executing Sync command")
+            self.logger.log_info("Executing Sync command")
             req : SetBool.Request = SetBool.Request()
             req.data = True
             client = self.create_client(SetBool, '/dummy_logging_server')
             while not client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().info('Service dummy_logging_server not available, waiting again...')
+                self.logger.log_info('Service dummy_logging_server not available, waiting again...')
             future = client.call_async(req)
             rclpy.spin_until_future_complete(self, future)
             if future.result() is not None:
                 response: SetBool.Response = future.result()
                 if response.success:
-                    self.get_logger().info("Sync command executed successfully")
+                    self.logger.log_info("Sync command executed successfully")
                 else:
-                    self.get_logger().info("Sync command execution failed")
+                    self.logger.log_info("Sync command execution failed")
             else:
-                self.get_logger().error(f"Service call failed: {future.exception()}")
+                self.logger.log_error(f"Service call failed: {future.exception()}")
         else:
-            self.get_logger().info("Invalid command")
+            self.logger.log_info("Invalid command")
 
         payload = {
             "success": True

@@ -115,7 +115,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     box_pose.orientation.w = 1.0; 
     box_pose.position.x = 0.0;
     box_pose.position.y = 0.0;
-    box_pose.position.z = -0.05;
+    box_pose.position.z = -0.35;
     collision_object.primitives.push_back(primitive);
     collision_object.primitive_poses.push_back(box_pose);
     collision_object.operation = collision_object.ADD;

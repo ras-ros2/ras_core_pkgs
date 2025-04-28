@@ -1,4 +1,5 @@
 import os
+import yaml
 from ras_bt_framework.behavior_utility.yaml_parser import read_yaml_to_pose_dict
 from ras_bt_framework.behavior_utility.update_bt import update_xml, update_bt
 import xml.etree.ElementTree as ET
@@ -167,11 +168,11 @@ class ExperimentService(Node):
         
         # Create and send goal
         goal_msg = ExecuteExp.Goal()
-        self.logger.log_info("Sending goal to execute experiment on real robot")
         
         # Send the goal asynchronously
         send_goal_future = self.execute_exp_client.send_goal_async(goal_msg)
         send_goal_future.add_done_callback(self.goal_response_callback)
+        self.logger.log_info("Goal sent to execute experiment on real robot")
     
     def goal_response_callback(self, future):
         """
@@ -185,7 +186,7 @@ class ExperimentService(Node):
             self.logger.log_info("Goal rejected")
             return
             
-        self.logger.log_info("Goal accepted")
+        # self.logger.log_info("Goal accepted")
         # Get result asynchronously
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(self.get_result_callback)
@@ -203,7 +204,6 @@ class ExperimentService(Node):
             
             # If experiment execution is active, directly set the event
             if self.exp_execution_active and self.sim_complete:
-                self.logger.log_info("Setting wait event based on action result")
                 self.wait_for_real_robot.set()
                 
         except Exception as e:
@@ -360,7 +360,7 @@ class ExperimentService(Node):
             else:
                 self.logger.log_info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}")
                 # Automatically simulate next step immediately
-                self.logger.log_info("Automatically simulating next step...")
+                # self.logger.log_info("Automatically simulating next step...")
                 success = self.simulate_current_step()
                 if not success:
                     self.logger.log_error("Next step simulation failed, stopping experiment execution")
@@ -392,6 +392,12 @@ class ExperimentService(Node):
             resp.success = False
             return resp
         
+        # Save the current experiment ID to a file for log_receiver to access
+        current_exp_path = os.path.join(RAS_CONFIGS_PATH, "current_experiment.txt")
+        with open(current_exp_path, 'w') as f:
+            f.write(exp_id)
+        # self.logger.log_info(f"Saved current experiment ID {exp_id} to {current_exp_path}")
+        
         self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
         self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
         
@@ -403,7 +409,7 @@ class ExperimentService(Node):
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
         
-        self.logger.log_info("Starting experiment flow...")
+        self.logger.log_info("Starting the experiment execution...")
         
         if self.target_sequence is None or len(self.target_sequence) == 0:
             self.logger.log_error("No experiment loaded or empty sequence")

@@ -36,6 +36,10 @@ from ras_transport.interfaces.TransportWrapper import TransportMQTTPublisher
 from aruco_interfaces.msg import ArucoMarkers
 from rclpy_message_converter import json_message_converter
 from ras_logging.ras_logger import RasLogger
+import threading
+
+LOG_FILE_PATH = "logs/app.log"
+LOG_FORWARD_TOPIC = "robot/logs/app"
 
 class ArmLogger(LifecycleNode):
     def __init__(self):
@@ -57,8 +61,12 @@ class ArmLogger(LifecycleNode):
 
         self.joint_list = []
 
+
+
     def connect_to_aws(self):
         self.mqtt_pub.connect_with_retries()
+
+
     
     def aruco_callback(self, msg):
         self.aruco_data = json_message_converter.convert_ros_message_to_json(msg)
@@ -100,6 +108,19 @@ class ArmLogger(LifecycleNode):
             # Include the image filename in the payload
             "image_filename": request.image_filename
         }
+        # Read the latest N log lines from the log file
+        N = 10  # Number of recent lines to send
+        recent_logs = []
+        try:
+            with open(LOG_FILE_PATH, "r") as f:
+                lines = f.readlines()
+                if lines:
+                    recent_logs = [line.strip() for line in lines[-N:]]
+        except Exception as e:
+            print(f"[ERROR] Could not read log file: {e}")
+
+        # Add the latest N log lines to the payload
+        self.trajlog["logs"] = recent_logs
         payload = json.dumps(self.trajlog)
         print(f"publishing logging data: {self.trajlog}")
         self.mqtt_pub.publish(payload)
@@ -119,7 +140,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
-
-
-            

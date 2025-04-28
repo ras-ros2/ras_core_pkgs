@@ -102,7 +102,7 @@ class BaTMan(Node):
         if not goal_handle.accepted:
             self.logger.log_info('Goal rejected :(')
             return
-        self.logger.log_info('Goal accepted :)')
+        # self.logger.log_info('Goal accepted :)')
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
         self.session_started = True
@@ -115,7 +115,7 @@ class BaTMan(Node):
             future (rclpy.Future): Future object containing the execution result.
         """
         result: BTInterface.Result = future.result()
-        self.logger.log_info('Result: {0}'.format(result.status))
+        # self.logger.log_info('Result: {0}'.format(result.status))
     
     def feedback_callback(self, feedback_msg):
         """

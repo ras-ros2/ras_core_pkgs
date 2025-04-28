@@ -89,4 +89,6 @@ def setup_logger(name: str = "app_logger"):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     return logger
+
 logger = setup_logger()
+

@@ -29,7 +29,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_logging.ras_logger import RasLogger
 from std_msgs.msg import Bool  # For publishing the gripper status as a Bool message
 
-class FakeGripperServer(Node):
+class GripperStatus(Node):
     def __init__(self):
         super().__init__("fake_gripper_node")
         self.logger = RasLogger()
@@ -65,7 +65,7 @@ class FakeGripperServer(Node):
 
 def main():
     rclpy.init(args=None)
-    node = FakeGripperServer()
+    node = GripperStatus()
     while rclpy.ok():
         rclpy.spin_once(node)
     rclpy.shutdown()

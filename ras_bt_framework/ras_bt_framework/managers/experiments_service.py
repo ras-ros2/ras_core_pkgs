@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import LoadExp
+from ras_interfaces.srv import ReportRobotState
 from std_srvs.srv import SetBool
 from .BaTMan import BaTMan
 from pathlib import Path
@@ -23,6 +24,9 @@ from ras_interfaces.action import ExecuteExp
 import subprocess
 from ras_logging.ras_logger import RasLogger
 
+import json
+import datetime
+
 class ExperimentService(Node):
     """
     A ROS2 service node for managing and executing robot experiments.
@@ -35,7 +39,57 @@ class ExperimentService(Node):
         counter_reset_client (Client): Client for resetting the experiment counter
         batman (BaTMan): Instance of BaTMan for managing experiment sequences
     """
-    
+    # File to persist experiment state
+    STATE_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_state.json")
+
+    def save_experiment_state(self):
+        state = {
+            "experiment_id": getattr(self, "current_experiment_id", None),
+            "current_step_index": getattr(self, "current_step_index", None),
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        try:
+            with open(self.STATE_FILE, 'w') as f:
+                json.dump(state, f)
+            self.logger.log_info(f"Experiment state saved: {state}")
+        except Exception as e:
+            self.logger.log_error(f"Failed to save experiment state: {e}")
+
+    def load_experiment_state(self):
+        if not os.path.exists(self.STATE_FILE):
+            return None
+        try:
+            with open(self.STATE_FILE, 'r') as f:
+                state = json.load(f)
+            self.logger.log_info(f"Experiment state loaded: {state}")
+            return state
+        except Exception as e:
+            self.logger.log_error(f"Failed to load experiment state: {e}")
+            return None
+
+    def recover_experiment_state(self):
+        state = self.load_experiment_state()
+        if state is not None:
+            exp_id = state.get("experiment_id")
+            step_idx = state.get("current_step_index", 0)
+            if exp_id is not None:
+                path = os.path.join(RAS_CONFIGS_PATH, "experiments", f"{exp_id}.yaml")
+                if Path(path).exists():
+                    self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
+                    self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
+                    self.current_step_index = step_idx
+                    self.total_steps = len(self.target_sequence)
+                    self.sim_complete = False
+                    self.current_experiment_id = exp_id
+                    self.logger.log_info(f"Recovered experiment '{exp_id}' at step {step_idx}")
+                else:
+                    self.logger.log_error(f"Experiment file for recovery not found: {path}")
+            else:
+                self.logger.log_info("No experiment ID found in saved state.")
+        else:
+            self.logger.log_info("No experiment state to recover.")
+        self.decide_recovery_action()
+
     def __init__(self):
         """
         Initialize the ExperimentService node.
@@ -49,6 +103,10 @@ class ExperimentService(Node):
         self.create_service(SetBool, "/sim_step", self.sim_step_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/next_step", self.next_step_callback, callback_group=self.my_callback_group)
         self.counter_reset_client = self.create_client(SetBool, '/reset_counter', callback_group=self.my_callback_group)
+
+        # Robot state reporting service
+        self.robot_state = {"state": "unknown", "details": ""}
+        self.create_service(ReportRobotState, "/report_robot_state", self.report_robot_state_callback, callback_group=self.my_callback_group)
         
         # Add action client for execute_exp
         self.execute_exp_client = ActionClient(self, ExecuteExp, '/execute_exp', callback_group=self.my_callback_group)
@@ -61,12 +119,16 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = 0
         self.sim_complete = False
+        self.current_experiment_id = None
         
         # Threading lock for experiment execution
         self.exp_execution_active = False
         self.exp_execution_thread = None
         self.exp_execution_lock = threading.Lock()
         self.wait_for_real_robot = threading.Event()
+
+        # Attempt to recover experiment state on startup
+        self.recover_experiment_state()
     
     def simulate_current_step(self):
         """
@@ -354,6 +416,7 @@ class ExperimentService(Node):
             # Move to next step
             self.current_step_index += 1
             self.sim_complete = False
+            self.save_experiment_state()
             
             if self.current_step_index >= self.total_steps:
                 self.logger.log_info("All steps completed successfully")
@@ -372,7 +435,50 @@ class ExperimentService(Node):
                 self.logger.log_info("Experiment execution completed")
             else:
                 self.logger.log_info("Experiment execution stopped")
+            self.save_experiment_state()
     
+    def report_robot_state_callback(self, request, response):
+        """
+        Callback for /report_robot_state service. Stores the latest robot state.
+        """
+        self.robot_state = {"state": request.state, "details": request.details}
+        self.logger.log_info(f"Robot state updated: {self.robot_state}")
+        self.decide_recovery_action()
+        response.success = True
+        response.message = f"Received robot state: {request.state}"
+        return response
+
+    def decide_recovery_action(self):
+        """
+        Decide the appropriate recovery action based on experiment and robot state.
+        Automatically resume experiment if safe.
+        """
+        exp_state = getattr(self, 'current_experiment_id', None)
+        step_idx = getattr(self, 'current_step_index', None)
+        robot_state = self.robot_state.get('state', 'unknown') if hasattr(self, 'robot_state') else 'unknown'
+
+        if not exp_state or step_idx is None:
+            self.logger.log_info("No persisted experiment state. No recovery needed.")
+            return
+
+        if robot_state in ["idle", "paused"]:
+            self.logger.log_info(f"Safe to resume experiment '{exp_state}' at step {step_idx}. Automatically resuming experiment.")
+            # Auto-resume logic
+            with self.exp_execution_lock:
+                if not self.exp_execution_active:
+                    self.exp_execution_active = True
+                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                    self.exp_execution_thread.daemon = True
+                    self.exp_execution_thread.start()
+                else:
+                    self.logger.log_info("Experiment execution already running.")
+        elif robot_state == "running":
+            self.logger.log_warn(f"Robot is running but experiment state is persisted. Manual intervention required before resuming experiment '{exp_state}' at step {step_idx}.")
+        elif robot_state == "error":
+            self.logger.log_error(f"Robot is in error state. Manual intervention required before any experiment recovery.")
+        else:
+            self.logger.log_info(f"Robot state unknown. Cannot safely recover experiment '{exp_state}'. Awaiting valid robot state report.")
+
     def execute_experiment_callback(self, req, resp):
         """
         Start the experiment flow that will process all steps in sequence.
@@ -404,6 +510,9 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = len(self.target_sequence)
         self.sim_complete = False
+        self.current_experiment_id = exp_id
+        
+        self.save_experiment_state()
         
         self.stop_exp_execution()  
         

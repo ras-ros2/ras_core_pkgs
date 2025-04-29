@@ -9,6 +9,7 @@ from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
 from ras_interfaces.action import BTInterface
 from ras_interfaces.srv import PrimitiveExec
+from ras_interfaces.srv import ReportRobotState
 from ras_interfaces.msg import BTNodeStatus
 from pathlib import Path
 import time
@@ -65,6 +66,9 @@ class BaTMan(Node):
         self.tick_cli = self.create_client(PrimitiveExec, '/bt_tick')
         self.loop_rate = self.create_rate(10)
         self.session_started = False
+
+        # Create a client for /report_robot_state
+        self.report_robot_state_client = self.create_client(ReportRobotState, '/report_robot_state')
 
     def generate_module_from_keywords(self, keywords: list, pose_targets: dict):
         """
@@ -143,7 +147,29 @@ class BaTMan(Node):
                 rclpy.spin_until_future_complete(self, future)
                 resp: PrimitiveExec.Response = future.result()
                 status = resp.status.data
-            
+
+            # Map BTNodeStatus to robot state string
+            if status == BTNodeStatus.SUCCESS:
+                robot_state = "idle"
+            elif status == BTNodeStatus.FAILURE:
+                robot_state = "error"
+            elif status == BTNodeStatus.RUNNING:
+                robot_state = "running"
+            elif status == BTNodeStatus.IDLE:
+                robot_state = "idle"
+            else:
+                robot_state = "unknown"
+
+            # Report robot state after each tick
+            if self.report_robot_state_client.wait_for_service(timeout_sec=1.0):
+                req_state = ReportRobotState.Request()
+                req_state.state = robot_state
+                req_state.details = f"BTNodeStatus: {status}"
+                future_state = self.report_robot_state_client.call_async(req_state)
+                # Optionally, do not wait for response (fire-and-forget)
+            else:
+                self.logger.log_warn("/report_robot_state service not available.")
+
             if status in [BTNodeStatus.FAILURE, BTNodeStatus.SKIPPED, BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
                 break
             self.loop_rate.sleep()

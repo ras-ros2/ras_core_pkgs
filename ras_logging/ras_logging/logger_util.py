@@ -19,11 +19,39 @@ class CustomFormatter(logging.Formatter):
         # Pretty-print dicts/lists
         if isinstance(record.msg, (dict, list)):
             record.msg = json.dumps(record.msg, indent=2)
-        try:
-            relative_path = Path(record.pathname).relative_to(Path.cwd())
-        except ValueError:
-            relative_path = record.pathname
-        record.file_info = f"{relative_path}:{record.lineno}"
+        # Try to trim the path to start from the main package directory
+        path_str = str(record.pathname).replace('\\', '/')  # Normalize for Windows/Linux
+        # Add more package roots as needed
+        pkg_roots = [
+            'ras_perception/',
+            'ras_transport/',
+            'ras_logging/',
+            'ras_core_pkgs/',
+            'ras_common/',
+            'ras_bt_framework/',
+            'ras_moveit/',
+            'ras_interfaces/',
+            'ras_sim/'
+        ]
+        for pkg in pkg_roots:
+            # Try to find the last occurrence of the package in the path
+            # (to avoid nested/duplicate package paths)
+            lib_idx = path_str.rfind(f'/lib/{pkg}')
+            if lib_idx != -1:
+                trimmed_path = path_str[lib_idx + 5:]
+                break
+            install_idx = path_str.rfind(f'/install/{pkg}lib/{pkg}')
+            if install_idx != -1:
+                trimmed_path = path_str[install_idx + 9:]
+                break
+            pkg_idx = path_str.rfind(pkg)
+            if pkg_idx != -1:
+                trimmed_path = path_str[pkg_idx:]
+                break
+        else:
+            # Fallback to filename only if no package found
+            trimmed_path = Path(record.pathname).name
+        record.file_info = f"{trimmed_path}:{record.lineno}"
         # Only colorize for console, never for file
         if self.use_colors:
             color_code = getattr(Colors, record.levelname, Colors.RESET)
@@ -61,4 +89,6 @@ def setup_logger(name: str = "app_logger"):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     return logger
+
 logger = setup_logger()
+

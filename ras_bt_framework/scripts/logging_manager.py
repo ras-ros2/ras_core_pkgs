@@ -53,7 +53,7 @@ class LoggingManager(Node):
 
         log_data = StatusLog.Request()
         log_data.traj_status = self.traj_status
-        log_data.current_traj = self.current_traj
+        # log_data.current_traj = self.current_traj
         log_data.gripper_status = self.gripper_status
         
         self.logging_client.call_async(log_data)

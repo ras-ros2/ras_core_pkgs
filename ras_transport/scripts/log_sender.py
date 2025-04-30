@@ -103,7 +103,6 @@ class ArmLogger(LifecycleNode):
             "joint_state": self.joint_list,
             "traj_status": request.traj_status,
             "gripper_status": request.gripper_status,
-            "current_traj": request.current_traj,
             "aruco_markers": self.aruco_data,
             # Include the image filename in the payload
             "image_filename": request.image_filename

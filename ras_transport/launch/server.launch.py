@@ -2,9 +2,11 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from ras_common.config.loaders.ras_config import RasObject
 from ras_common.socket_utils import check_if_bindable
+from ras_logging.ras_logger import RasLogger
 
 def generate_launch_description():
     RasObject.init()
+    logger = RasLogger()
     file_srv_cfg = RasObject.ras.transport.file_server
     mqtt_brkr_cfg = RasObject.ras.transport.mqtt
     
@@ -40,10 +42,10 @@ def generate_launch_description():
                 )
             )
         else:
-            print(f"ERROR!!: File server not bindable at {file_srv_cfg.ip}:{file_srv_cfg.port}")
+            logger.log_error(f"ERROR!!: File server not bindable at {file_srv_cfg.ip}:{file_srv_cfg.port}")
             exit(1)
     else:
-        print("INFO: Using external file server")
+        logger.log_info("Using external file server")
     if not mqtt_brkr_cfg.use_external:
         if check_if_bindable(mqtt_brkr_cfg.ip, mqtt_brkr_cfg.port):
             nodes.append(
@@ -55,8 +57,8 @@ def generate_launch_description():
                 ),
             )
         else:
-            print(f"ERROR!!: MQTT broker not bindable at {mqtt_brkr_cfg.ip}:{mqtt_brkr_cfg.port}")
+            logger.log_error(f"ERROR!!: MQTT broker not bindable at {mqtt_brkr_cfg.ip}:{mqtt_brkr_cfg.port}")
             exit(1)
     else:
-        print("INFO: Using external MQTT broker")
+        logger.log_info("Using external MQTT broker")
     return LaunchDescription(nodes)

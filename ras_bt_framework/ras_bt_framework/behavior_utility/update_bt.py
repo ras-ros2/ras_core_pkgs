@@ -50,8 +50,8 @@ def update_bt(behavior: BehaviorModule, sequence=None):
     if isinstance(behavior, BehaviorModuleSequence):
         new_children = []
         new_children.append(LoggerClientTrigger())
-        print(f"Sequence: {sequence.get()}")
-        print(f"Behavior: {behavior}")
+        # print(f"Sequence: {sequence.get()}")
+        # print(f"Behavior: {behavior}")
         # def add_new_child(child):
         #     new_children.append(child)
         #     if isinstance(child, (ExecuteTrajectory)):

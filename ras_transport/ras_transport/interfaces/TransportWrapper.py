@@ -6,13 +6,14 @@ from ras_common.globals import RAS_APP_PATH,RAS_APP_NAME
 from threading import Thread
 import queue
 import time
-
+from ras_logging.ras_logger import RasLogger
 
 class TransportFileServer(object):
     serve_path = Path(RAS_APP_PATH)/"serve"
     def __init__(self) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
+        self.logger = RasLogger()
         self.serve_path.mkdir(parents=True, exist_ok=True)
         transport_conf = RasConfigLoader.ras.transport
         file_server = TransportLoader.get_transport(transport_conf.implementation).file_server
@@ -35,6 +36,7 @@ class TransportFileClient(object):
     def __init__(self) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
+        self.logger = RasLogger()
         file_client = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).file_client
         file_conf = RasConfigLoader.ras.transport.file_server
         self.file_client = file_client(file_conf.ip,file_conf.port)
@@ -47,10 +49,10 @@ class TransportFileClient(object):
         while True:
             try:
                 self.connect()
-                print("Connected to FileServer",flush=True)
+                self.logger.log_info("Connected to FileServer")
                 break
             except Exception as e:
-                print(f"Connection to FileServer failed: {e}. Retrying in 5 seconds...")
+                self.logger.log_error(f"Connection to FileServer failed: {e}. Retrying in 5 seconds...")
                 time.sleep(delay_sec)
 
     def upload(self, local_path: Path, remote_path: Path) -> bool:
@@ -69,6 +71,7 @@ class TransportMQTTPublisher(object):
     def __init__(self,topic_name) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
+        self.logger = RasLogger()
         self.topic_name = topic_name
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         publisher = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).publisher
@@ -82,10 +85,10 @@ class TransportMQTTPublisher(object):
         while True:
             try:
                 self.connect()
-                print("Connected to MQtt Broker",flush=True)
+                self.logger.log_info("Connected to MQtt Broker")
                 break
             except Exception as e:
-                print(f"Connection to MQtt Broker failed: {e}. Retrying in 5 seconds...")
+                self.logger.log_error(f"Connection to MQtt Broker failed: {e}. Retrying in 5 seconds...")
                 time.sleep(delay_sec)
 
     def publish(self, payload : bytes|str|dict):
@@ -96,7 +99,7 @@ class TransportMQTTPublisher(object):
             payload = payload.encode("utf-8")
         if not isinstance(payload,bytes):
             raise Exception("Payload must be of type bytes, str or dict")
-        print(f"Publishing to {self.topic_name}")
+        self.logger.log_info(f"Publishing to {self.topic_name}")
         self.mqttpublisher.publish(payload)
 
     def loop(self):
@@ -112,14 +115,14 @@ class TransportMQTTSubscriber(object):
     def __init__(self,topic_name,callback,queue_size=None) -> None:
         TransportLoader.init()
         RasConfigLoader.init()
-
+        self.logger = RasLogger()
         mqtt_conf = RasConfigLoader.ras.transport.mqtt
         subscriber = TransportLoader.get_transport(RasConfigLoader.ras.transport.implementation).subscriber
         if not isinstance(queue_size,int):
             queue_size=0
         self.cb_queue = queue.Queue(maxsize=queue_size)
         def callback_wrapper(payload):
-            print(f"Received message on {topic_name}")
+            self.logger.log_info(f"Received message on {topic_name}")
             t = Thread(target=callback,args=(payload,))
             self.cb_queue.put(t)
             # callback(payload)
@@ -133,10 +136,10 @@ class TransportMQTTSubscriber(object):
         while True:
             try:
                 self.connect()
-                print("Connected to MQtt Broker",flush=True)
+                self.logger.log_info("Connected to MQtt Broker")
                 break
             except Exception as e:
-                print(f"Connection to MQtt Broker failed: {e}. Retrying in 5 seconds...")
+                self.logger.log_error(f"Connection to MQtt Broker failed: {e}. Retrying in 5 seconds...")
                 time.sleep(delay_sec)
     
     def loop(self):
@@ -168,6 +171,7 @@ class TransportServiceServer(object):
     def __init__(self,topic_name:str,callback,queue_size=None):
         assert callable(callback)
         self.callback = callback
+        self.logger = RasLogger()
         self.subscriber = TransportMQTTSubscriber("req/"+topic_name,callback=self.srv_callback,queue_size=queue_size)
         self.resp_pub = TransportMQTTPublisher("resp/"+topic_name)
     
@@ -209,6 +213,7 @@ class TransportServiceClient(object):
     """
     def __init__(self, topic_name: str):
         assert isinstance(topic_name, str)
+        self.logger = RasLogger()
         self.req_pub = TransportMQTTPublisher("req/" + topic_name)
         self.subscriber = TransportMQTTSubscriber("resp/" + topic_name, callback=self.on_response)
         self.resp_flag : bool = False

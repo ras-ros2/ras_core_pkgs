@@ -152,7 +152,7 @@ class TrajectoryLogger(LifecycleNode):
         # Create and send request
         request = StatusLog.Request()
         request.traj_status = status_value
-        request.current_traj = 0  # Default value if not provided
+        # request.current_traj = 0  # Default value if not provided
         request.gripper_status = False  # Default value if not provided
         
         future = self.status_client.call_async(request)

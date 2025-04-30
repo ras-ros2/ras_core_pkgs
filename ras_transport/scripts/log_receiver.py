@@ -104,9 +104,9 @@ class TrajectoryLogger(LifecycleNode):
     def listener_callback(self, msg):
         self.latest_gripper_msg = msg
         if msg.data:
-            self.get_logger().info('Gripper is ON')
+            self.logger.log_info('Gripper is ON')
         else:
-            self.get_logger().info('Gripper is OFF')
+            self.logger.log_info('Gripper is OFF')
 
     def gripper_callback(self, msg):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
@@ -140,7 +140,7 @@ class TrajectoryLogger(LifecycleNode):
                 with open(configs_exp_path, 'r') as f:
                     content = f.read().strip()
                     if content:
-                        self.logger.log_info(f"Using experiment name from {configs_exp_path}: {content}")
+                        # self.logger.log_info(f"Using experiment name from {configs_exp_path}: {content}")
                         return content
                         
             # Try the yaml file format
@@ -167,10 +167,10 @@ class TrajectoryLogger(LifecycleNode):
         self.mqtt_sub.connect_with_retries()
         
     def custom_callback(self, message):
-        self.logger.log_info(f"message is {message} and type is {type(message)}")
+        # self.logger.log_info(f"message is {message} and type is {type(message)}")
         self.payload =  message.decode("utf-8")
         self.logger.log_info(f"now type is {type(self.payload)}")
-        self.logger.log_info("Received Message")
+        self.logger.log_info("Received Message through MQTT")
 
         # Append only log lines to app.log
         server_log_path = Path(RAS_APP_PATH) / "logs" / "app.log"
@@ -206,7 +206,7 @@ class TrajectoryLogger(LifecycleNode):
                 self.json_path = self.experiment_log_path / "json"
                 self.json_path.mkdir(parents=True, exist_ok=True)
             
-            self.logger.log_info(f"payload: {self.payload[:200]}...")  # Print first 200 chars to avoid flooding logs
+            # self.logger.log_info(f"payload: {self.payload[:200]}...")  # Print first 200 chars to avoid flooding logs
             log_data = json.loads(self.payload)
             self.logger.log_info(f"Log data type: {log_data.get('type')}")
 
@@ -268,28 +268,12 @@ class TrajectoryLogger(LifecycleNode):
                     except Exception as e:
                         self.logger.log_warn(f"Error extracting step number from image filename: {e}")
             
-            # Check other fields if still not found
-            if not step_num and 'current_traj' in log_data:
-                step_num = str(log_data.get('current_traj', ''))
-                self.logger.log_info(f"Using current_traj value '{step_num}' as step number")
-            if not step_num:
-                step_num = "unknown"
-            
-            # Set step number in current_traj if necessary
-            if 'current_traj' in log_data and not isinstance(log_data['current_traj'], int):
-                try:
-                    # Try to convert step_num to integer if it's not already
-                    log_data['current_traj'] = int(step_num) if step_num.isdigit() else 0
-                    self.logger.log_info(f"Updated current_traj to: {log_data['current_traj']}")
-                except Exception as e:
-                    self.logger.log_warn(f"Failed to update current_traj: {e}")
-            
             # Update traj_status to include step number if it's currently just SUCCESS/FAILED
             if 'traj_status' in log_data:
                 if log_data['traj_status'] in ['SUCCESS', 'FAILED']:
                     orig_status = log_data['traj_status']
                     log_data['traj_status'] = f"{orig_status}_{step_num}"
-                    self.logger.log_info(f"Updated traj_status to include step: {log_data['traj_status']}")
+                    # self.logger.log_info(f"Updated traj_status to include step: {log_data['traj_status']}")
 
             # Add gripper status to the log_data
             if self.latest_gripper_msg is not None:
@@ -320,8 +304,16 @@ class TrajectoryLogger(LifecycleNode):
                 # self.logger.log_info("Removing 'logs' field from JSON data before saving")
                 log_data_to_save = log_data.copy()
                 log_data_to_save.pop('logs', None)
+                # Remove current_traj field if present
+                if 'current_traj' in log_data_to_save:
+                    log_data_to_save.pop('current_traj', None)
+                    # self.logger.log_info("Removed 'current_traj' field from JSON data before saving")
             else:
-                log_data_to_save = log_data
+                log_data_to_save = log_data.copy()
+                # Remove current_traj field if present
+                if 'current_traj' in log_data_to_save:
+                    log_data_to_save.pop('current_traj', None)
+                    self.logger.log_info("Removed 'current_traj' field from JSON data before saving")
             
             if image_filename:
                 with open(json_file_path, 'w') as f:
@@ -347,23 +339,23 @@ class TrajectoryLogger(LifecycleNode):
                 # self.aruco_sync_flag = False
                 
             if log_data.get("traj_status") == "SUCCESS" or log_data.get("traj_status", "").startswith("SUCCESS_"):
-                self.logger.log_info("SUCCESS")
+                # self.logger.log_info("trajectory execution successful")
                 request = JointSat.Request()
                 request.joint_state.position = log_data["joint_state"]
                 self.future = self.service_sync.call_async(request)
                 rclpy.spin_until_future_complete(self, self.future)
 
             if log_data.get("traj_status") == "FAILED" or log_data.get("traj_status", "").startswith("FAILED_"):
-                self.logger.log_info("FAILED")
+                # self.logger.log_info("trajectory execution failed")
                 # request = SetBool.Request()
                 # request.data = True
                 # self.future = self.service_.call_async(request)
                 request = LoadExp.Request()
                 # Use the step number from traj_status or current_traj
-                if step_num and step_num.isdigit():
-                    request.instruction_no = step_num
-                else:
-                    request.instruction_no = str(log_data.get("current_traj", 0))
+                # if step_num and step_num.isdigit():
+                #     request.instruction_no = step_num
+                # else:
+                #     request.instruction_no = str(log_data.get("current_traj", 0))
                 request.picked_object = "beaker-1"
                 self.future2 = self.fallback_client.call_async(request)
                 rclpy.spin_until_future_complete(self, self.future2)
@@ -426,8 +418,6 @@ class TrajectoryLogger(LifecycleNode):
                         pass
                         
             # If still not found, check other fields
-            if not step_num and 'current_traj' in log_data:
-                step_num = log_data.get('current_traj', '')
             if not step_num:
                 step_num = "unknown"
             
@@ -470,6 +460,9 @@ class TrajectoryLogger(LifecycleNode):
             if 'logs' in original_data:
                 self.logger.log_info("Removing 'logs' field from image metadata")
                 original_data.pop('logs', None)
+            # Remove current_traj from image metadata as well
+            if 'current_traj' in original_data:
+                original_data.pop('current_traj', None)
             log_meta['original_image_data'] = original_data
             
             # Create JSON filename pattern for image metadata using the same step number

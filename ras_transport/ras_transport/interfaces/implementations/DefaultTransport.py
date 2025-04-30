@@ -320,10 +320,10 @@ class HttpClient(FileClientInterface):
             files = {'file': f}
             response = requests.post(f"{self.server_url}/upload", files=files)
             if response.status_code == 200:
-                print("Upload successful:", response.json())
+                # print("Upload successful:", response.json())
                 return True
             else:
-                print("Failed to upload file:", response.json())
+                # print("Failed to upload file:", response.json())
                 return False
 
     def safe_kill(self) -> None:

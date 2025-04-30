@@ -61,6 +61,9 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = 0
         self.sim_complete = False
+        self.retry_mode = False  # Flag to indicate if we're retrying
+        self.max_retries = 1     # Maximum number of retries per step
+        self.current_retries = 0 # Counter for retries on current step
         
         # Threading lock for experiment execution
         self.exp_execution_active = False
@@ -202,12 +205,65 @@ class ExperimentService(Node):
             result = future.result().result
             self.logger.log_info(f"Real robot execution completed with result: {result}")
             
-            # If experiment execution is active, directly set the event
+            # If experiment execution is active, check result status
             if self.exp_execution_active and self.sim_complete:
-                self.wait_for_real_robot.set()
+                if result.success:
+                    # Success case - proceed as normal
+                    self.current_retries = 0  # Reset retry counter on success
+                    self.retry_mode = False   # Exit retry mode
+                    self.wait_for_real_robot.set()
+                else:
+                    # Failure case - need to retry
+                    self.current_retries += 1
+                    if self.current_retries <= self.max_retries:
+                        self.logger.log_warn(f"Real robot execution failed. Retrying the same step (attempt {self.current_retries}/{self.max_retries})...")
+                        
+                        # Set retry mode and clear sim_complete flag to force re-simulation
+                        self.retry_mode = True
+                        self.sim_complete = False
+                        
+                        # Run retry in a separate thread to not block this callback
+                        retry_thread = threading.Thread(target=self.retry_failed_step)
+                        retry_thread.daemon = True
+                        retry_thread.start()
+                    else:
+                        # Max retries reached, go back to previous step
+                        self.retry_mode = False
+                        self.current_retries = 0
+                        
+                        if self.current_step_index > 0:
+                            self.logger.log_warn(f"Max retries reached. Moving back to step {self.current_step_index}/{self.total_steps}...")
+                            self.current_step_index -= 1
+                        else:
+                            self.logger.log_warn("Max retries reached at first step. Will restart from this step.")
+                            
+                        # Clear simulation flag to force re-simulation of the previous/current step
+                        self.sim_complete = False
+                        
+                        # Signal main thread to continue with the updated step index
+                        self.wait_for_real_robot.set()
                 
         except Exception as e:
             self.logger.log_error(f"Error in get_result_callback: {e}", e)
+    
+    def retry_failed_step(self):
+        """
+        Retry the current step after a failure.
+        """
+        self.logger.log_info(f"Retrying step {self.current_step_index + 1}/{self.total_steps}...")
+        
+        # Rerun simulation for the current step
+        success = self.simulate_current_step()
+        
+        if not success:
+            self.logger.log_error("Retry simulation failed")
+            # Exit retry mode and signal to continue
+            self.retry_mode = False
+            self.wait_for_real_robot.set()
+            return
+        
+        # Note: The execution result and retry logic will be handled in get_result_callback
+        # No need to handle timeouts here as the main thread already does that
     
     def sim_step_callback(self, req, resp):
         """
@@ -337,7 +393,10 @@ class ExperimentService(Node):
             while not self.wait_for_real_robot.is_set() and elapsed_time < wait_timeout and self.exp_execution_active:
                 # Limited-time wait allows for periodic status checks
                 if self.wait_for_real_robot.wait(polling_interval):
-                    self.logger.log_info("Received signal to proceed to next step")
+                    if self.retry_mode:
+                        self.logger.log_info("Retrying current step due to failure")
+                    else:
+                        self.logger.log_info("Received signal to proceed to next step")
                     break
                 
                 elapsed_time += polling_interval
@@ -346,10 +405,17 @@ class ExperimentService(Node):
             
             if not self.wait_for_real_robot.is_set() and self.exp_execution_active:
                 self.logger.log_warn(f"Timeout waiting for real robot execution status after {elapsed_time}s")
+                # Add a handle condition here
+                self.stop_exp_execution()  
             
             if not self.exp_execution_active:
                 self.logger.log_info("Experiment execution stopped while waiting for real robot")
                 break
+            
+            # If in retry mode, continue with same step (don't increment)
+            if self.retry_mode:
+                self.sim_complete = False
+                continue
                 
             # Move to next step
             self.current_step_index += 1
@@ -360,7 +426,6 @@ class ExperimentService(Node):
             else:
                 self.logger.log_info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}")
                 # Automatically simulate next step immediately
-                # self.logger.log_info("Automatically simulating next step...")
                 success = self.simulate_current_step()
                 if not success:
                     self.logger.log_error("Next step simulation failed, stopping experiment execution")

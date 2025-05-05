@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="http://www.ros.org/reps/rep-0140/rep-0140-20210629.xsl" type="text/xsl"?>
+<package format="3">
+  <name>ras_performance_monitor</name>
+  <version>0.0.1</version>
+  <description>RAS Performance Monitoring Tools</description>
+  <maintainer email="your.email@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+  
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>python3</build_depend>
+  <depend>ras_logging</depend>
+  
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+</package>

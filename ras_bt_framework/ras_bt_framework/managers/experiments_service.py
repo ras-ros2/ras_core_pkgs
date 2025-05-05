@@ -8,6 +8,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from ras_interfaces.srv import LoadExp
 from ras_interfaces.srv import ReportRobotState
 from std_srvs.srv import SetBool
+from std_srvs.srv import Trigger
 from .BaTMan import BaTMan
 from pathlib import Path
 from ras_interfaces.msg import BTNodeStatus
@@ -129,6 +130,9 @@ class ExperimentService(Node):
 
         # Attempt to recover experiment state on startup
         self.recover_experiment_state()
+
+        # Add /resume_experiment service
+        self.create_service(Trigger, "/resume_experiment", self.resume_experiment_callback)
     
     def simulate_current_step(self):
         """
@@ -477,7 +481,23 @@ class ExperimentService(Node):
         elif robot_state == "error":
             self.logger.log_error(f"Robot is in error state. Manual intervention required before any experiment recovery.")
         else:
-            self.logger.log_info(f"Robot state unknown. Cannot safely recover experiment '{exp_state}'. Awaiting valid robot state report.")
+            self.logger.log_warn(f"Robot state unknown. Experiment is paused. Run /resume_experiment to continue experiment '{exp_state}' at step {step_idx}.")
+
+    def resume_experiment_callback(self, req, resp):
+        with self.exp_execution_lock:
+            if not self.exp_execution_active:
+                self.exp_execution_active = True
+                self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                self.exp_execution_thread.daemon = True
+                self.exp_execution_thread.start()
+                resp.success = True
+                resp.message = "Experiment resumed."
+                self.logger.log_info("Experiment resumed via /resume_experiment service.")
+            else:
+                resp.success = False
+                resp.message = "Experiment already running."
+                self.logger.log_info("Resume requested but experiment already running.")
+        return resp
 
     def execute_experiment_callback(self, req, resp):
         """

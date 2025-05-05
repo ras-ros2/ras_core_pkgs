@@ -1,5 +1,6 @@
 import os
 import yaml
+import datetime
 from ras_bt_framework.behavior_utility.yaml_parser import read_yaml_to_pose_dict
 from ras_bt_framework.behavior_utility.update_bt import update_xml, update_bt
 import xml.etree.ElementTree as ET
@@ -26,7 +27,7 @@ import subprocess
 from ras_logging.ras_logger import RasLogger
 
 import json
-import datetime
+
 
 class ExperimentService(Node):
     """
@@ -121,6 +122,9 @@ class ExperimentService(Node):
         self.total_steps = 0
         self.sim_complete = False
         self.current_experiment_id = None
+        self.retry_mode = False  # Flag to indicate if we're retrying
+        self.max_retries = 1     # Maximum number of retries per step
+        self.current_retries = 0 # Counter for retries on current step
         
         # Threading lock for experiment execution
         self.exp_execution_active = False
@@ -268,12 +272,65 @@ class ExperimentService(Node):
             result = future.result().result
             self.logger.log_info(f"Real robot execution completed with result: {result}")
             
-            # If experiment execution is active, directly set the event
+            # If experiment execution is active, check result status
             if self.exp_execution_active and self.sim_complete:
-                self.wait_for_real_robot.set()
+                if result.success:
+                    # Success case - proceed as normal
+                    self.current_retries = 0  # Reset retry counter on success
+                    self.retry_mode = False   # Exit retry mode
+                    self.wait_for_real_robot.set()
+                else:
+                    # Failure case - need to retry
+                    self.current_retries += 1
+                    if self.current_retries <= self.max_retries:
+                        self.logger.log_warn(f"Real robot execution failed. Retrying the same step (attempt {self.current_retries}/{self.max_retries})...")
+                        
+                        # Set retry mode and clear sim_complete flag to force re-simulation
+                        self.retry_mode = True
+                        self.sim_complete = False
+                        
+                        # Run retry in a separate thread to not block this callback
+                        retry_thread = threading.Thread(target=self.retry_failed_step)
+                        retry_thread.daemon = True
+                        retry_thread.start()
+                    else:
+                        # Max retries reached, go back to previous step
+                        self.retry_mode = False
+                        self.current_retries = 0
+                        
+                        if self.current_step_index > 0:
+                            self.logger.log_warn(f"Max retries reached. Moving back to step {self.current_step_index}/{self.total_steps}...")
+                            self.current_step_index -= 1
+                        else:
+                            self.logger.log_warn("Max retries reached at first step. Will restart from this step.")
+                            
+                        # Clear simulation flag to force re-simulation of the previous/current step
+                        self.sim_complete = False
+                        
+                        # Signal main thread to continue with the updated step index
+                        self.wait_for_real_robot.set()
                 
         except Exception as e:
             self.logger.log_error(f"Error in get_result_callback: {e}", e)
+    
+    def retry_failed_step(self):
+        """
+        Retry the current step after a failure.
+        """
+        self.logger.log_info(f"Retrying step {self.current_step_index + 1}/{self.total_steps}...")
+        
+        # Rerun simulation for the current step
+        success = self.simulate_current_step()
+        
+        if not success:
+            self.logger.log_error("Retry simulation failed")
+            # Exit retry mode and signal to continue
+            self.retry_mode = False
+            self.wait_for_real_robot.set()
+            return
+        
+        # Note: The execution result and retry logic will be handled in get_result_callback
+        # No need to handle timeouts here as the main thread already does that
     
     def sim_step_callback(self, req, resp):
         """
@@ -369,8 +426,12 @@ class ExperimentService(Node):
         with self.exp_execution_lock:
             self.exp_execution_active = False
             if self.exp_execution_thread and self.exp_execution_thread.is_alive():
-                self.wait_for_real_robot.set()  # Signal thread to exit if waiting
-                self.exp_execution_thread.join(timeout=1.0)
+                # Check if we're trying to join the current thread
+                if self.exp_execution_thread is not threading.current_thread():
+                    self.wait_for_real_robot.set()  # Signal thread to exit if waiting
+                    self.exp_execution_thread.join(timeout=1.0)
+                else:
+                    self.logger.log_warn("Cannot join current thread - will terminate naturally")
             self.exp_execution_thread = None
             self.wait_for_real_robot.clear()
     
@@ -403,19 +464,38 @@ class ExperimentService(Node):
             while not self.wait_for_real_robot.is_set() and elapsed_time < wait_timeout and self.exp_execution_active:
                 # Limited-time wait allows for periodic status checks
                 if self.wait_for_real_robot.wait(polling_interval):
-                    self.logger.log_info("Received signal to proceed to next step")
+                    if self.retry_mode:
+                        self.logger.log_info("Retrying current step due to failure")
+                    else:
+                        self.logger.log_info("Received signal to proceed to next step")
                     break
                 
                 elapsed_time += polling_interval
                 if elapsed_time % 30 == 0:  # Log every 30 seconds
                     self.logger.log_info(f"Still waiting for real robot execution status... ({elapsed_time}s elapsed)")
+                    
+                    # Restart transport server and retry step after 60 seconds of waiting
+                    if elapsed_time % 60 == 0 and elapsed_time > 0:
+                        self.logger.log_warn("Communication timeout detected. Attempting to restart transport server...")
+                        if self.restart_transport_server():
+                            self.logger.log_info("Transport server restarted successfully. Resending current step...")
+                            self.simulate_current_step()
+                        else:
+                            self.logger.log_error("Failed to restart transport server. Will continue waiting...")
             
             if not self.wait_for_real_robot.is_set() and self.exp_execution_active:
                 self.logger.log_warn(f"Timeout waiting for real robot execution status after {elapsed_time}s")
+                # Add a handle condition here
+                self.stop_exp_execution()  
             
             if not self.exp_execution_active:
                 self.logger.log_info("Experiment execution stopped while waiting for real robot")
                 break
+            
+            # If in retry mode, continue with same step (don't increment)
+            if self.retry_mode:
+                self.sim_complete = False
+                continue
                 
             # Move to next step
             self.current_step_index += 1
@@ -427,7 +507,6 @@ class ExperimentService(Node):
             else:
                 self.logger.log_info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}")
                 # Automatically simulate next step immediately
-                # self.logger.log_info("Automatically simulating next step...")
                 success = self.simulate_current_step()
                 if not success:
                     self.logger.log_error("Next step simulation failed, stopping experiment execution")
@@ -559,3 +638,92 @@ class ExperimentService(Node):
             
         resp.success = True
         return resp
+
+    def restart_transport_server(self):
+        """
+        Restart the ROS transport server by killing the existing process and launching a new one.
+        This helps recover from communication issues with the real robot.
+        """
+        try:
+            # Get current time for logging
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.logger.log_info(f"[{timestamp}] Transport server restart initiated")
+            # Check if we can access tmux
+            try:
+                tmux_check = subprocess.run("tmux list-sessions", shell=True, capture_output=True, text=True)
+                if tmux_check.returncode != 0:
+                    self.logger.log_error(f"Cannot access tmux: {tmux_check.stderr}")
+                    return False
+                else:
+                    self.logger.log_info(f"Available tmux sessions: {tmux_check.stdout.strip()}")
+            except Exception as e:
+                self.logger.log_error(f"Error checking tmux: {e}")
+                return False
+            # First find and kill any existing server.launch.py processes
+            self.logger.log_info("Finding existing server.launch.py processes...")
+            find_cmd = "pgrep -f 'ros2 launch ras_transport server.launch.py'"
+            try:
+                pids = subprocess.check_output(find_cmd, shell=True, text=True).strip()
+                if pids:
+                    # Found processes, kill them
+                    pids_list = pids.split('\n')
+                    self.logger.log_info(f"Found {len(pids_list)} server processes: {pids}")
+                    for pid in pids_list:
+                        if pid.strip():
+                            self.logger.log_info(f"Killing process with PID {pid}...")
+                            kill_cmd = f"kill -9 {pid}"
+                            kill_result = subprocess.run(kill_cmd, shell=True, capture_output=True, text=True)
+                            if kill_result.returncode != 0:
+                                self.logger.log_error(f"Error killing process {pid}: {kill_result.stderr}")
+                            else:
+                                self.logger.log_info(f"Successfully killed process {pid}")
+                    # Wait a moment for processes to terminate
+                    time.sleep(2)
+                    # Verify all processes were killed
+                    verify_cmd = "pgrep -f 'ros2 launch ras_transport server.launch.py'"
+                    try:
+                        verify_pids = subprocess.check_output(verify_cmd, shell=True, text=True).strip()
+                        if verify_pids:
+                            self.logger.log_warn(f"Some processes still running: {verify_pids}")
+                        else:
+                            self.logger.log_info("All server processes successfully terminated")
+                    except subprocess.CalledProcessError:
+                        self.logger.log_info("All server processes successfully terminated")
+                else:
+                    self.logger.log_info("No running server processes found")
+            except subprocess.CalledProcessError:
+                # No processes found, which is fine
+                self.logger.log_info("No existing server.launch.py processes found")
+            # Now start a new server process
+            self.logger.log_info("Starting new transport server...")
+            # Using tmux as specified in the original run.sh script
+            cmd = "tmux send-keys -t main_session:1.2 \"ros2 launch ras_transport server.launch.py\" C-m"
+            try:
+                cmd_result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                if cmd_result.returncode != 0:
+                    self.logger.log_error(f"Error starting transport server: {cmd_result.stderr}")
+                    return False
+                else:
+                    self.logger.log_info("Transport server restart command sent successfully")
+            except Exception as e:
+                self.logger.log_error(f"Exception starting transport server: {e}")
+                return False
+            # Give the server a moment to start up
+            self.logger.log_info("Waiting for transport server to initialize...")
+            time.sleep(5)
+            # Check if the server is running
+            check_cmd = "pgrep -f 'ros2 launch ras_transport server.launch.py'"
+            try:
+                check_pids = subprocess.check_output(check_cmd, shell=True, text=True).strip()
+                if check_pids:
+                    self.logger.log_info(f"Transport server successfully started with PIDs: {check_pids}")
+                    return True
+                else:
+                    self.logger.log_error("Transport server did not start properly")
+                    return False
+            except subprocess.CalledProcessError:
+                self.logger.log_error("Transport server did not start properly")
+                return False
+        except Exception as e:
+            self.logger.log_error(f"Failed to restart transport server: {e}")
+            return False

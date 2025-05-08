@@ -46,6 +46,7 @@ set(srv_files
   "srv/ArucoPoses.srv"
   "srv/MoveSim.srv"
   "srv/SpawnSim.srv"
+  "srv/ReportRobotState.srv"
 )
 set(action_files
   "action/BTInterface.action"

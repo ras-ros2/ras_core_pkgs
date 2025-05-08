@@ -1,0 +1,7 @@
+# ReportRobotState.srv
+# Request: robot reports its current state to the server
+string state  # e.g., 'idle', 'running', 'error', 'paused'
+string details  # optional details or error message
+---
+bool success
+string message

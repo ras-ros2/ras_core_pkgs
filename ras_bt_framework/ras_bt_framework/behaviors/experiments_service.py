@@ -6,8 +6,11 @@ from ..behaviors.keywords import TargetPoseMap, rotate, gripper, joint_state
 from ..behaviors.ports import PortPoseCfg
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_common.config.loaders.objects import ObjectTypes
-from .behavior_utility.yaml_parser import read_yaml_to_pose_dict
-from ..behaviors.gen_primitives import PickPrimitive
+from .behavior_utility.yaml_parser import read_yaml_to_pose_dict, read_yaml_to_target_dict
+from ..behaviors.gen_primitives import Pick as PickPrimitive
+from ..behaviors.gen_primitives import PickFront as PickFrontPrimitive
+from ..behaviors.gen_primitives import Place as PlacePrimitive
+from copy import deepcopy
 
 class ExperimentsService:
     """
@@ -93,6 +96,19 @@ class ExperimentsService:
                         i_pre_grasp_offset=0.1
                     )
                     sequence.add_child(pick_module)
+                elif key == "PickFront":
+                    if value not in self.pose_map:
+                        raise ValueError(f"Invalid pose name for PickFront: {value}")
+
+                    pose_cfg = deepcopy(self.pose_map[value])
+                    # # Set pitch to -1.57 radians (-90 degrees) for front approach
+                    # pose_cfg.pose.pitch = -1.57
+                    pickfront_module = PickFrontPrimitive(
+                        i_target_pose=pose_cfg,
+                        i_grasp_frame="grasp",         # Default values as in parser
+                        i_pre_grasp_offset=0.1
+                    )
+                    sequence.add_child(pickfront_module)
                 elif key == "Place":
                     if value not in self.pose_map:
                         raise ValueError(f"Invalid pose name for Place: {value}")

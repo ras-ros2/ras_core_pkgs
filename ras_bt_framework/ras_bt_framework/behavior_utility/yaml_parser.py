@@ -3,6 +3,11 @@ import yaml
 from ..behaviors.ports import PortPoseCfg
 from ras_common.config.loaders.common import PoseConfig
 from ras_common.config.loaders.lab_setup import LabSetup
+import copy
+import math
+from ras_logging.ras_logger import RasLogger
+
+logger = RasLogger()
 
 def validate_pose_values(pose_values):
     """
@@ -74,6 +79,48 @@ def convert_pose_to_meters(pose_values):
         'yaw': pose_values['yaw']
     }
 
+def check_radius_constraint(pose_name, pose_values):
+    """
+    Checks if the pose's x and y coordinates satisfy the constraint that
+    sqrt(x² + y²) < min(max_x, max_y) based on the robot's workspace constraints.
+    
+    Args:
+        pose_name (str): Name of the pose
+        pose_values (dict): Dictionary containing pose values
+        
+    Returns:
+        bool: True if constraint is satisfied, False otherwise
+    """
+    # Initialize LabSetup if not already initialized
+    LabSetup.init()
+
+    # Get the robot constraints
+    if LabSetup.constraints is None:
+        raise ValueError(f"No constraints found for robot {LabSetup.robot_name}")
+
+    workspace_constraints = LabSetup.constraints.workspace
+    
+    # Get the maximum allowable values for x and y
+    x_min, x_max = workspace_constraints['x']
+    y_min, y_max = workspace_constraints['y']
+    
+    # Get the absolute values since we're calculating radius
+    max_x = min(abs(x_min), abs(x_max))
+    max_y = min(abs(y_min), abs(y_max))
+    
+    # Use the smaller of the two as the maximum radius
+    max_radius = min(max_x, max_y)
+    
+    x = pose_values['x']
+    y = pose_values['y']
+    radius = math.sqrt(x**2 + y**2)
+    
+    if radius >= max_radius:
+        logger.log_error(f"Error for pose '{pose_name}': x or y out of bounds. " 
+                    f"sqrt({x}² + {y}²) = {radius} is not less than maximum allowed radius {max_radius}")
+        return False
+    return True
+
 def read_yaml_to_pose_dict(path):
     print(f"Reading YAML file: {path}")
 
@@ -85,8 +132,9 @@ def read_yaml_to_pose_dict(path):
     
     pose_dict = {}
     for pose_name, pose_values in data['Poses'].items():
+        check_radius_constraint(pose_name, pose_values)
         pose_values = convert_pose_to_meters(pose_values)
-        validate_pose_values(pose_values)
+        # validate_pose_values(pose_values)
         pose_dict[pose_name] = PortPoseCfg(pose=PoseConfig.from_dict(pose_values))
 
     if 'targets' not in data:
@@ -121,6 +169,14 @@ def read_yaml_to_pose_dict(path):
                     target_pose.append({"gripper": False})
                 else:
                     raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "single_joint_state":
+                # Format should be [joint_index, joint_value]
+                if isinstance(value, list) and len(value) == 2:
+                    joint_index = int(value[0])
+                    joint_value = float(value[1])
+                    target_pose.append({"single_joint_state": [joint_index, joint_value]})
+                else:
+                    raise ValueError("single_joint_state expects a list [joint_index, joint_value]")
             else:
                 raise KeyError(f"Unknown target action: {key}")
         else:

@@ -66,26 +66,6 @@ class TargetPoseMap(object):
         move2pose_sequence = BehaviorModuleSequence()
         move2pose_sequence.add_children([self.move2pose_module(pose) for pose in poses])
         return move2pose_sequence
-
-    # def pick_module(self,pose:str,clearance:float=0.10,height:float=0.10):
-    #     """
-    #     Create a pick sequence module for grasping objects.
-        
-    #     Args:
-    #         pose (str): Name of the pose where the object is located
-    #         clearance (float, optional): Distance to move before/after picking. Defaults to 0.10.
-    #         height (float, optional): Height to lift the object. Defaults to 0.10.
-            
-    #     Returns:
-    #         PickSequence: Behavior module for picking sequence
-            
-    #     Raises:
-    #         ValueError: If pose name is invalid
-    #     """
-    #     if pose in self.pose_map:
-    #         return PickSequence(pose,clearance=clearance,height=height)
-    #     else:
-    #         raise ValueError(f"Invalid pose name {pose}")
     
     def pick_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
         """
@@ -118,26 +98,6 @@ class TargetPoseMap(object):
             seq.add_child(self.move2pose_module(target_name))
             seq.add_child(gripper(True))  # False = close gripper
             return seq
-
-    # def place_module(self,pose:str,clearance:float=0.10,height:float=0.10):
-    #     """
-    #     Create a place sequence module for releasing objects.
-        
-    #     Args:
-    #         pose (str): Name of the pose where the object should be placed
-    #         clearance (float, optional): Distance to move before/after placing. Defaults to 0.10.
-    #         height (float, optional): Height to lower the object. Defaults to 0.10.
-            
-    #     Returns:
-    #         PlaceSequence: Behavior module for placing sequence
-            
-    #     Raises:
-    #         ValueError: If pose name is invalid
-    #     """
-    #     if pose in self.pose_map:
-    #         return PlaceSequence(pose,clearance=clearance,height=height)
-    #     else:
-    #         raise ValueError(f"Invalid pose name {pose}")
 
     def place_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
         """
@@ -210,10 +170,44 @@ def joint_state(joints:list):
     """
     from ras_common.config.loaders.lab_setup import LabSetup
     LabSetup.init()
-    joint_names = list(LabSetup.conf.robot.home_joint_state.keys())
+    joint_names = list(LabSetup.robot_config.home_joint_state.keys())
     if len(joints) != len(joint_names): 
         raise ValueError(f"Invalid number of joints {len(joints)}")
     joint_state = ",".join([f"{joint_names[i]}:{joints[i]}" for i in range(len(joints))])
+    return MoveToJointState(i_joint_state=joint_state)
+
+def single_joint_state(joint_index:int, joint_value:float):
+    """
+    Create a behavior module to move a single joint to a specific angle.
+    
+    Args:
+        joint_index (int): Index of the joint to move (0-5 for a 6-joint robot)
+        joint_value (float): Joint angle in radians
+        
+    Returns:
+        MoveToJointState: Behavior module for moving the specified joint
+        
+    Raises:
+        ValueError: If the joint index is out of range
+        
+    Example:
+        # Move the 3rd joint (index 2) to 1.5 radians
+        module = single_joint_state(2, 1.5)
+        
+        # In YAML experiment file:
+        # targets:
+        #   - single_joint_state: [2, 1.5]  # Move 3rd joint to 1.5 radians
+    """
+    from ras_common.config.loaders.lab_setup import LabSetup
+    LabSetup.init()
+    joint_names = list(LabSetup.robot_config.home_joint_state.keys())
+    
+    if joint_index < 0 or joint_index >= len(joint_names):
+        raise ValueError(f"Joint index {joint_index} out of range. Valid range: 0-{len(joint_names)-1}")
+    
+    # Create a string with only the specified joint
+    joint_state = f"{joint_names[joint_index]}:{joint_value}"
+    
     return MoveToJointState(i_joint_state=joint_state)
 
 # Mapping of keyword functions to their implementations
@@ -221,4 +215,5 @@ keyword_mapping = {
     "rotate": rotate,
     "gripper": gripper,
     'joint_state': joint_state,
+    'single_joint_state': single_joint_state,
 }

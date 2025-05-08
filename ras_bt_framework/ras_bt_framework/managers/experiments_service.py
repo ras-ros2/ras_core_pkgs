@@ -1,5 +1,12 @@
 import os
 import yaml
+import datetime
+import json
+import time
+import signal
+import threading
+import subprocess
+import psutil
 from ras_bt_framework.behavior_utility.yaml_parser import read_yaml_to_pose_dict
 from ras_bt_framework.behavior_utility.update_bt import update_xml, update_bt
 import xml.etree.ElementTree as ET
@@ -22,6 +29,8 @@ from rclpy.action import ActionClient
 from ras_interfaces.action import ExecuteExp
 import subprocess
 from ras_logging.ras_logger import RasLogger
+from ras_interfaces.srv import ReportRobotState
+from std_srvs.srv import Trigger
 
 class ExperimentService(Node):
     """
@@ -35,7 +44,9 @@ class ExperimentService(Node):
         counter_reset_client (Client): Client for resetting the experiment counter
         batman (BaTMan): Instance of BaTMan for managing experiment sequences
     """
-    
+    # File to persist experiment state
+    STATE_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_state.json")
+
     def __init__(self):
         """
         Initialize the ExperimentService node.
@@ -61,16 +72,131 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = 0
         self.sim_complete = False
-        self.retry_mode = False  # Flag to indicate if we're retrying
-        self.max_retries = 1     # Maximum number of retries per step
-        self.current_retries = 0 # Counter for retries on current step
         
         # Threading lock for experiment execution
         self.exp_execution_active = False
         self.exp_execution_thread = None
         self.exp_execution_lock = threading.Lock()
         self.wait_for_real_robot = threading.Event()
-    
+        self.current_experiment_id = None
+
+        self.robot_state =  {"state": "unknown", "details": ""}
+
+        self.create_service(ReportRobotState, "/report_robot_state", self.report_robot_state_callback, callback_group=self.my_callback_group)
+        
+        # Attempt to recover experiment state on startup
+        self.recover_experiment_state()
+
+        # Add /resume_experiment service
+        self.create_service(Trigger, "/resume_experiment", self.resume_experiment_callback)
+
+    def save_experiment_state(self):
+        state = {
+            "experiment_id": getattr(self, "current_experiment_id", None),
+            "current_step_index": getattr(self, "current_step_index", None),
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        try:
+            with open(self.STATE_FILE, 'w') as f:
+                json.dump(state, f)
+            self.logger.log_info(f"Experiment state saved: {state}")
+        except Exception as e:
+            self.logger.log_error(f"Failed to save experiment state: {e}")
+
+    def load_experiment_state(self):
+        if not os.path.exists(self.STATE_FILE):
+            return None
+        try:
+            with open(self.STATE_FILE, 'r') as f:
+                state = json.load(f)
+            self.logger.log_info(f"Experiment state loaded: {state}")
+            return state
+        except Exception as e:
+            self.logger.log_error(f"Failed to load experiment state: {e}")
+            return None
+
+    def recover_experiment_state(self):
+        state = self.load_experiment_state()
+        if state is not None:
+            exp_id = state.get("experiment_id")
+            step_idx = state.get("current_step_index", 0)
+            if exp_id is not None:
+                path = os.path.join(RAS_CONFIGS_PATH, "experiments", f"{exp_id}.yaml")
+                if Path(path).exists():
+                    self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
+                    self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
+                    self.current_step_index = step_idx
+                    self.total_steps = len(self.target_sequence)
+                    self.sim_complete = False
+                    self.current_experiment_id = exp_id
+                    self.logger.log_info(f"Recovered experiment '{exp_id}' at step {step_idx}")
+                else:
+                    self.logger.log_error(f"Experiment file for recovery not found: {path}")
+            else:
+                self.logger.log_info("No experiment ID found in saved state.")
+        else:
+            self.logger.log_info("No experiment state to recover.")
+        self.decide_recovery_action()
+
+    def report_robot_state_callback(self, request, response):
+        """
+        Callback for /report_robot_state service. Stores the latest robot state.
+        """
+
+        self.robot_state = {"state": request.state, "details": request.details}
+        self.logger.log_info(f"Robot state updated: {self.robot_state}")
+        self.decide_recovery_action()
+        response.success = True
+        response.message = f"Received robot state: {request.state}"
+        return response
+
+    def decide_recovery_action(self):
+        """
+        Decide the appropriate recovery action based on experiment and robot state.
+        Automatically resume experiment if safe.
+        """
+
+        exp_state = getattr(self, 'current_experiment_id', None)
+        step_idx = getattr(self, 'current_step_index', None)
+        robot_state = self.robot_state.get('state', 'unknown') if hasattr(self, 'robot_state') else 'unknown'
+        if not exp_state or step_idx is None:
+            self.logger.log_info("No persisted experiment state. No recovery needed.")
+            return
+
+        if robot_state in ["idle", "paused"]:
+            self.logger.log_info(f"Safe to resume experiment '{exp_state}' at step {step_idx}. Automatically resuming experiment.")
+            # Auto-resume logic
+            with self.exp_execution_lock:
+                if not self.exp_execution_active:
+                    self.exp_execution_active = True
+                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                    self.exp_execution_thread.daemon = True
+                    self.exp_execution_thread.start()
+                else:
+                    self.logger.log_info("Experiment execution already running.")
+        elif robot_state == "running":
+            self.logger.log_warn(f"Robot is running but experiment state is persisted. Manual intervention required before resuming experiment '{exp_state}' at step {step_idx}.")
+        elif robot_state == "error":
+            self.logger.log_error(f"Robot is in error state. Manual intervention required before any experiment recovery.")
+        else:
+            self.logger.log_warn(f"Robot state unknown. Experiment is paused. Run /resume_experiment to continue experiment '{exp_state}' at step {step_idx}.")
+
+    def resume_experiment_callback(self, req, resp):
+        with self.exp_execution_lock:
+            if not self.exp_execution_active:
+                self.exp_execution_active = True
+                self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                self.exp_execution_thread.daemon = True
+                self.exp_execution_thread.start()
+                resp.success = True
+                resp.message = "Experiment resumed."
+                self.logger.log_info("Experiment resumed via /resume_experiment service.")
+            else:
+                resp.success = False
+                resp.message = "Experiment already running."
+                self.logger.log_info("Resume requested but experiment already running.")
+        return resp
+
     def simulate_current_step(self):
         """
         Simulate the current step in the sequence:
@@ -209,61 +335,68 @@ class ExperimentService(Node):
             if self.exp_execution_active and self.sim_complete:
                 if result.success:
                     # Success case - proceed as normal
-                    self.current_retries = 0  # Reset retry counter on success
-                    self.retry_mode = False   # Exit retry mode
                     self.wait_for_real_robot.set()
                 else:
-                    # Failure case - need to retry
-                    self.current_retries += 1
-                    if self.current_retries <= self.max_retries:
-                        self.logger.log_warn(f"Real robot execution failed. Retrying the same step (attempt {self.current_retries}/{self.max_retries})...")
-                        
-                        # Set retry mode and clear sim_complete flag to force re-simulation
-                        self.retry_mode = True
-                        self.sim_complete = False
-                        
-                        # Run retry in a separate thread to not block this callback
-                        retry_thread = threading.Thread(target=self.retry_failed_step)
-                        retry_thread.daemon = True
-                        retry_thread.start()
-                    else:
-                        # Max retries reached, go back to previous step
-                        self.retry_mode = False
-                        self.current_retries = 0
-                        
-                        if self.current_step_index > 0:
-                            self.logger.log_warn(f"Max retries reached. Moving back to step {self.current_step_index}/{self.total_steps}...")
-                            self.current_step_index -= 1
-                        else:
-                            self.logger.log_warn("Max retries reached at first step. Will restart from this step.")
-                            
-                        # Clear simulation flag to force re-simulation of the previous/current step
-                        self.sim_complete = False
-                        
-                        # Signal main thread to continue with the updated step index
-                        self.wait_for_real_robot.set()
+                    # Failure case - log error and signal to continue
+                    self.logger.log_error("Real robot execution failed.")
+                    self.logger.log_info("Signaling to continue to next step despite failure.")
+                    self.wait_for_real_robot.set()
                 
         except Exception as e:
             self.logger.log_error(f"Error in get_result_callback: {e}", e)
     
-    def retry_failed_step(self):
+    def restart_transport_services(self):
         """
-        Retry the current step after a failure.
+        Restarts the transport services (log_receiver, tot_sender, transport_server_service)
+        and relaunches the transport server after a 60-second wait time.
         """
-        self.logger.log_info(f"Retrying step {self.current_step_index + 1}/{self.total_steps}...")
-        
-        # Rerun simulation for the current step
-        success = self.simulate_current_step()
-        
-        if not success:
-            self.logger.log_error("Retry simulation failed")
-            # Exit retry mode and signal to continue
-            self.retry_mode = False
-            self.wait_for_real_robot.set()
-            return
-        
-        # Note: The execution result and retry logic will be handled in get_result_callback
-        # No need to handle timeouts here as the main thread already does that
+        try:
+            self.logger.log_info("Initiating transport services restart...")
+            
+            # Find and kill the processes by name
+            processes_to_kill = ["log_receiver.py", "iot_sender.py", "transport_server_service.py"]
+            
+            # First kill the terminal session by sending CTRL+C to tmux pane
+            self.logger.log_info("Sending CTRL+C to kill transport server terminal session...")
+            try:
+                subprocess.run("tmux send-keys -t main_session:1.2 C-c", shell=True, check=True)
+                time.sleep(2)  # Give CTRL+C some time to take effect
+            except Exception as e:
+                self.logger.log_error(f"Error sending CTRL+C to tmux: {e}")
+            
+            # Then kill any remaining processes
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info['cmdline']
+                    if not cmdline:
+                        continue
+                    
+                    proc_cmd = ' '.join(cmdline)
+                    
+                    if any(proc_name in proc_cmd for proc_name in processes_to_kill):
+                        self.logger.log_info(f"Killing process: {proc.info['pid']} - {proc_cmd}")
+                        try:
+                            os.kill(proc.info['pid'], signal.SIGTERM)
+                        except Exception as e:
+                            self.logger.log_error(f"Error killing process {proc.info['pid']}: {e}")
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+            
+            # Wait for 60 seconds
+            self.logger.log_info("Waiting 10 seconds before restarting transport services...")
+            time.sleep(10)
+            
+            # Relaunch the transport server using tmux
+            self.logger.log_info("Relaunching transport server...")
+            cmd = "tmux send-keys -t main_session:1.2 \"ros2 launch ras_transport server.launch.py\" C-m"
+            subprocess.run(cmd, shell=True, check=True)
+            self.logger.log_info("Transport server relaunched successfully")
+            self.logger.log_info("1. You can now resume the experiment using resume_experiment service")
+            self.logger.log_info("OR")
+            self.logger.log_info("2. You can start a new experiment using execute_experiment service")
+            
+        except Exception as e:
+            self.logger.log_error(f"Error in restart_transport_services: {e}")
     
     def sim_step_callback(self, req, resp):
         """
@@ -359,8 +492,12 @@ class ExperimentService(Node):
         with self.exp_execution_lock:
             self.exp_execution_active = False
             if self.exp_execution_thread and self.exp_execution_thread.is_alive():
-                self.wait_for_real_robot.set()  # Signal thread to exit if waiting
-                self.exp_execution_thread.join(timeout=1.0)
+                # Check if we're trying to join the current thread
+                if self.exp_execution_thread is not threading.current_thread():
+                    self.wait_for_real_robot.set()  # Signal thread to exit if waiting
+                    self.exp_execution_thread.join(timeout=1.0)
+                else:
+                    self.logger.log_warn("Cannot join current thread - will terminate naturally")
             self.exp_execution_thread = None
             self.wait_for_real_robot.clear()
     
@@ -393,14 +530,16 @@ class ExperimentService(Node):
             while not self.wait_for_real_robot.is_set() and elapsed_time < wait_timeout and self.exp_execution_active:
                 # Limited-time wait allows for periodic status checks
                 if self.wait_for_real_robot.wait(polling_interval):
-                    if self.retry_mode:
-                        self.logger.log_info("Retrying current step due to failure")
-                    else:
-                        self.logger.log_info("Received signal to proceed to next step")
+                    self.logger.log_info("Received signal to proceed to next step")
                     break
                 
                 elapsed_time += polling_interval
-                if elapsed_time % 30 == 0:  # Log every 30 seconds
+                if elapsed_time == 60:  # Call restart_transport_services exactly at 60 seconds
+                    self.logger.log_info("60 seconds elapsed, restarting transport services...")
+                    self.restart_transport_services()
+                    self.stop_exp_execution()
+                    
+                elif elapsed_time % 30 == 0 and elapsed_time != 60:  # Log status every 30 seconds, except when restarting services
                     self.logger.log_info(f"Still waiting for real robot execution status... ({elapsed_time}s elapsed)")
             
             if not self.wait_for_real_robot.is_set() and self.exp_execution_active:
@@ -412,15 +551,12 @@ class ExperimentService(Node):
                 self.logger.log_info("Experiment execution stopped while waiting for real robot")
                 break
             
-            # If in retry mode, continue with same step (don't increment)
-            if self.retry_mode:
-                self.sim_complete = False
-                continue
-                
-            # Move to next step
+            # Move to the next step
             self.current_step_index += 1
             self.sim_complete = False
             
+            self.save_experiment_state()
+
             if self.current_step_index >= self.total_steps:
                 self.logger.log_info("All steps completed successfully")
             else:
@@ -437,6 +573,8 @@ class ExperimentService(Node):
                 self.logger.log_info("Experiment execution completed")
             else:
                 self.logger.log_info("Experiment execution stopped")
+
+            self.save_experiment_state()
     
     def execute_experiment_callback(self, req, resp):
         """
@@ -469,11 +607,15 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = len(self.target_sequence)
         self.sim_complete = False
-        
+       
+        self.current_experiment_id = exp_id
+
+        self.save_experiment_state()
+
         self.stop_exp_execution()  
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
-        
+
         self.logger.log_info("Starting the experiment execution...")
         
         if self.target_sequence is None or len(self.target_sequence) == 0:

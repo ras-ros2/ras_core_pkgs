@@ -132,6 +132,7 @@ def read_yaml_to_pose_dict(path):
     
     pose_dict = {}
     for pose_name, pose_values in data['Poses'].items():
+        validate_pose_values(pose_values)
         check_radius_constraint(pose_name, pose_values)
         pose_values = convert_pose_to_meters(pose_values)
         # validate_pose_values(pose_values)

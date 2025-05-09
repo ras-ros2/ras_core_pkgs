@@ -180,6 +180,8 @@ class ExperimentService(Node):
             self.logger.log_error(f"Robot is in error state. Manual intervention required before any experiment recovery.")
         else:
             self.logger.log_warn(f"Robot state unknown. Experiment is paused. Run /resume_experiment to continue experiment '{exp_state}' at step {step_idx}.")
+        
+        self.logger.log_info(f"Ensure the object width should be within the range of 2.2 to 3.8 centimeters as per the gripper constraints.")
 
     def resume_experiment_callback(self, req, resp):
         with self.exp_execution_lock:

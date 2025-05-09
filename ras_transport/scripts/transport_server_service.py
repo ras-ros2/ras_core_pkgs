@@ -36,7 +36,6 @@ class TransportServerService(Node):
         self.server_transport_client = TransportServiceClient("server_transport")
         self.sync_robot_server = TransportServiceServer("sync_robot", self.sync_robot_cb)
         self.connect_aws()
-    
 
     def sync_robot_cb(self, message):
         print("sync data received") # TODO(Sachin): remove this later
@@ -52,10 +51,6 @@ class TransportServerService(Node):
                 "success": True
             }
         return json.dumps(payload)
-
-        
-
-    
 
     def connect_aws(self):
         self.server_transport_client.connect_with_retries()

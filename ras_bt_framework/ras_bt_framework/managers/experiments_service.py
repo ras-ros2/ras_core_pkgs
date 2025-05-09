@@ -181,6 +181,8 @@ class ExperimentService(Node):
         else:
             self.logger.log_warn(f"Robot state unknown. Experiment is paused. Run /resume_experiment to continue experiment '{exp_state}' at step {step_idx}.")
 
+        self.logger.log_info(f"Ensure the object width should be within the range of 2.2 to 3.8 centimeters as per the gripper constraints.")
+
     def resume_experiment_callback(self, req, resp):
         with self.exp_execution_lock:
             if not self.exp_execution_active:
@@ -615,7 +617,7 @@ class ExperimentService(Node):
         self.stop_exp_execution()  
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
-        
+
         self.logger.log_info("Starting the experiment execution...")
         
         if self.target_sequence is None or len(self.target_sequence) == 0:

@@ -71,5 +71,21 @@ class LoggerClientTrigger(PrimitiveInstruction):
 
 @dataclass
 class MoveToJointState(PrimitiveInstruction):
+    """
+    Primitive instruction to move robot to a specific joint state.
+    
+    Supports two modes:
+    1. Full joint state: Provide values for all joints as a comma-separated string.
+       Format: "joint1:value1,joint2:value2,joint3:value3,..."
+       
+    2. Single joint: Provide value for only one joint.
+       Format: "joint_name:value"
+       
+    The primitive will handle moving only the specified joint while keeping others
+    at their current positions when a single joint is specified.
+    
+    Attributes:
+        i_joint_state (str): Joint state specification string
+    """
     i_joint_state: str
     

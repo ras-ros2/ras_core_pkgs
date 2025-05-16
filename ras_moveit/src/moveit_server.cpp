@@ -72,6 +72,14 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
             "trajectory_topic",
             std::bind(&MoveitServer::trajectory_callback, this, std::placeholders::_1, std::placeholders::_2));
         
+        place_object_srv_ = this->create_service<ras_interfaces::srv::PlaceObject>(
+            "/place_object",
+            std::bind(&MoveitServer::place_object_callback, this, std::placeholders::_1, std::placeholders::_2));
+        
+        pick_object_srv_ = this->create_service<ras_interfaces::srv::PickObject>(
+            "/pick_object",
+            std::bind(&MoveitServer::pick_object_callback, this, std::placeholders::_1, std::placeholders::_2));
+        
         AddScenePlane();
         }
 
@@ -489,6 +497,80 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
     {
       joint_angle.push_back(i);
     }
+  }
+
+  void MoveitServer::place_object_callback(
+      const std::shared_ptr<ras_interfaces::srv::PlaceObject::Request> request,
+      std::shared_ptr<ras_interfaces::srv::PlaceObject::Response> response)
+  {
+      RCLCPP_INFO(this->get_logger(), "Received place object request");
+
+      // 1. Move to the target pose
+      RCLCPP_INFO(this->get_logger(), "Moving to target pose: x=%f, y=%f, z=%f", 
+                  request->target_pose.position.x,
+                  request->target_pose.position.y,
+                  request->target_pose.position.z);
+                  
+      bool move_success = Execute(request->target_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to target pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to target pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to target pose");
+
+      // 2. Simulate gripper action directly
+      RCLCPP_INFO(this->get_logger(), "Simulating gripper action: %s", 
+                  request->grip_state ? "CLOSING gripper" : "OPENING gripper");
+      
+      // Add a short delay to simulate gripper action
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+      
+      RCLCPP_INFO(this->get_logger(), "Gripper action completed: %s", 
+                  request->grip_state ? "Gripper CLOSED" : "Gripper OPENED");
+      
+      // 3. Complete the operation
+      response->success = true;
+      response->message = "Place object operation completed successfully";
+      RCLCPP_INFO(this->get_logger(), "Place object operation completed successfully");
+  }
+
+  void MoveitServer::pick_object_callback(
+      const std::shared_ptr<ras_interfaces::srv::PickObject::Request> request,
+      std::shared_ptr<ras_interfaces::srv::PickObject::Response> response)
+  {
+      RCLCPP_INFO(this->get_logger(), "Received pick object request");
+
+      // 1. Move to the target pose
+      RCLCPP_INFO(this->get_logger(), "Moving to pick pose: x=%f, y=%f, z=%f", 
+                  request->target_pose.position.x,
+                  request->target_pose.position.y,
+                  request->target_pose.position.z);
+                  
+      bool move_success = Execute(request->target_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to pick pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to pick pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to pick pose");
+
+      // 2. Simulate gripper action directly
+      RCLCPP_INFO(this->get_logger(), "Simulating gripper action: %s", 
+                  request->grip_state ? "CLOSING gripper" : "OPENING gripper");
+      
+      // Add a short delay to simulate gripper action
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+      
+      RCLCPP_INFO(this->get_logger(), "Gripper action completed: %s", 
+                  request->grip_state ? "Gripper CLOSED" : "Gripper OPENED");
+      
+      // 3. Complete the operation
+      response->success = true;
+      response->message = "Pick object operation completed successfully";
+      RCLCPP_INFO(this->get_logger(), "Pick object operation completed successfully");
   }
 
 int main(int argc, char **argv) {

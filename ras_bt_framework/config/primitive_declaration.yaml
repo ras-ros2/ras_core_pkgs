@@ -24,6 +24,13 @@ primitives:
       trigger: bool
     output_ports:
       status: bool
+  Pick_Front:
+    type: composite
+    input_ports:
+      pose: Pose
+      trigger: bool
+    output_ports:
+      status: bool
   Place:
     type: composite
     input_ports:

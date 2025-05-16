@@ -88,4 +88,34 @@ class MoveToJointState(PrimitiveInstruction):
         i_joint_state (str): Joint state specification string
     """
     i_joint_state: str
+
+@dataclass
+class PlaceObject(PrimitiveInstruction):
+    """
+    Combined primitive that handles both moving to a pose and controlling the gripper in one step.
+    
+    This primitive is specifically designed for place operations, combining the movement
+    to a target pose and gripper control (typically opening) into a single atomic operation.
+    
+    Attributes:
+        i_pose (PortPose): Target pose for placing the object
+        i_grip_state (bool): Gripper state (default False for open/release)
+    """
+    i_pose: PortPose
+    i_grip_state: bool = False  # Default to False (open) for placing objects
+    
+@dataclass
+class PickObject(PrimitiveInstruction):
+    """
+    Combined primitive that handles both moving to a pose and controlling the gripper in one step.
+    
+    This primitive is specifically designed for pick operations, combining the movement
+    to a target pose and gripper control (typically closing) into a single atomic operation.
+    
+    Attributes:
+        i_pose (PortPose): Target pose for picking the object
+        i_grip_state (bool): Gripper state (default True for close/grip)
+    """
+    i_pose: PortPose
+    i_grip_state: bool = True  # Default to True (close) for picking objects
     

@@ -20,7 +20,7 @@ find_package(std_srvs REQUIRED)
 
 install(
   DIRECTORY
-  config src templates
+  src templates
   DESTINATION
   share/${PROJECT_NAME}
 )

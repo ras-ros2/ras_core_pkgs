@@ -2,11 +2,13 @@ import os
 import yaml
 from typing import Dict, List, Optional, Tuple
 from ..behavior_template.module import BehaviorModuleSequence
-from ..behaviors.keywords import TargetPoseMap, rotate, gripper, joint_state, Pick, Place
+from ..behaviors.keywords import TargetPoseMap, rotate, gripper, joint_state, Pick, Pick_Front, Place
 from ..behaviors.ports import PortPoseCfg
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_common.config.loaders.objects import ObjectTypes
 from .behavior_utility.yaml_parser import read_yaml_to_pose_dict
+from copy import deepcopy
+from ..behaviors.keywords import MoveToPose
 
 class BatMan:
     """
@@ -99,8 +101,85 @@ class BatMan:
 
                     sequence.add_child(self.pose_map.move2pose_module(pose_name))
                     sequence.add_child(gripper("close"))
+                elif key == "Pick_Front":
+                    # Composite action: move to pose with modified pitch and close gripper
+                    if isinstance(value, dict):
+                        pose_name = value.get("pose")
+                    else:
+                        pose_name = value
+
+                    if pose_name in self.pose_map:
+                        # Create a sequence for the two-step approach
+                        pick_front_sequence = BehaviorModuleSequence()
+                        
+                        # First pose: move back
+                        pose_cfg_1 = deepcopy(self.pose_map[pose_name])
+                        pose_cfg_1.pose.x = pose_cfg_1.pose.x - 0.1
+                        pose_cfg_1.pose.pitch = -1.57
+                        pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_1))
+                        
+                        # Second pose: adjust pitch
+                        pose_cfg_2 = deepcopy(self.pose_map[pose_cfg_1])
+                        pose_cfg_2.pose.z = pose_cfg_2.pose.z - 0.08
+                        pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_2))
+
+                        # Second pose: adjust pitch
+                        pose_cfg_3 = deepcopy(self.pose_map[pose_cfg_2])
+                        pose_cfg_3.pose.x = pose_cfg_3.pose.x + 0.02
+                        pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_3))
+                        
+                        # Add gripper action
+                        pick_front_sequence.add_child(gripper("close"))
+
+                        pose_cfg_4 = deepcopy(self.pose_map[pose_cfg_3])
+                        pose_cfg_4.pose.x = pose_cfg_3.pose.x - 0.03
+                        
+                        pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_2))
+
+                        sequence.add_child(pick_front_sequence)
+                    else:
+                        raise ValueError(f"Invalid pose name: {pose_name}")
+                elif key == "Pick_Right":
+                    # Composite action: move to pose from the Right and close gripper
+                    if isinstance(value, dict):
+                        pose_name = value.get("pose")
+                    else:
+                        pose_name = value
+
+                    if pose_name in self.pose_map:
+                        # Create a sequence for the Right approach
+                        pick_Right_sequence = BehaviorModuleSequence()
+                        
+                        # First pose: move to the Right
+                        pose_cfg_1 = deepcopy(self.pose_map[pose_name])
+                        pose_cfg_1.pose.y = pose_cfg_1.pose.y - 0.1
+                        pose_cfg_1.pose.yaw = 1.57  # Rotate 90 degrees to face the Right
+                        pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_1))
+                        
+                        # Second pose: adjust position for Right approach
+                        pose_cfg_2 = deepcopy(self.pose_map[pose_cfg_1])
+                        pose_cfg_2.pose.x = pose_cfg_2.pose.x - 0.05
+                        pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_2))
+
+                        # Third pose: approach the object
+                        pose_cfg_3 = deepcopy(self.pose_map[pose_cfg_2])
+                        pose_cfg_3.pose.y = pose_cfg_3.pose.y + 0.08
+                        pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_3))
+                        
+                        # Add gripper action
+                        pick_Right_sequence.add_child(gripper("close"))
+
+                        # Fourth pose: retreat with object
+                        pose_cfg_4 = deepcopy(self.pose_map[pose_cfg_3])
+                        pose_cfg_4.pose.y = pose_cfg_4.pose.y - 0.05
+                        pose_cfg_4.pose.z = pose_cfg_4.pose.z + 0.03
+                        pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_4))
+
+                        sequence.add_child(pick_Right_sequence)
+                    else:
+                        raise ValueError(f"Invalid pose name: {pose_name}")
                 elif key == "Place":
-                    # Composite action: move to pose and close gripper
+                    # Composite action: move to pose and open gripper
                     if isinstance(value, dict):
                         pose_name = value.get("pose")
                     else:
@@ -108,6 +187,14 @@ class BatMan:
 
                     sequence.add_child(self.pose_map.move2pose_module(pose_name))
                     sequence.add_child(gripper("open"))
+                elif key == "PlaceObject":
+                    # Use the unified primitive that combines movement and gripper control
+                    if isinstance(value, dict):
+                        pose_name = value.get("pose")
+                    else:
+                        pose_name = value
+                        
+                    sequence.add_child(self.pose_map.place_object_module(pose_name))
                 else:
                     raise ValueError(f"Unknown target action: {key}")
             else:

@@ -8,9 +8,10 @@ from ras_common.config.loaders.lab_setup import LabSetup
 from ras_common.config.loaders.objects import ObjectTypes
 from .behavior_utility.yaml_parser import read_yaml_to_pose_dict, read_yaml_to_target_dict
 from ..behaviors.gen_primitives import Pick as PickPrimitive
-from ..behaviors.gen_primitives import PickFront as PickFrontPrimitive
+from ..behaviors.gen_primitives import Pick_Front as PickFrontPrimitive
 from ..behaviors.gen_primitives import Place as PlacePrimitive
 from copy import deepcopy
+from ..behaviors.gen_primitives import MoveToPose
 
 class ExperimentsService:
     """
@@ -96,19 +97,87 @@ class ExperimentsService:
                         i_pre_grasp_offset=0.1
                     )
                     sequence.add_child(pick_module)
-                elif key == "PickFront":
+                elif key == "Pick_Front":
+                    
                     if value not in self.pose_map:
-                        raise ValueError(f"Invalid pose name for PickFront: {value}")
+                        raise ValueError(f"Invalid pose name for Pick_Front: {value}")
 
-                    pose_cfg = deepcopy(self.pose_map[value])
-                    # # Set pitch to -1.57 radians (-90 degrees) for front approach
-                    # pose_cfg.pose.pitch = -1.57
-                    pickfront_module = PickFrontPrimitive(
-                        i_target_pose=pose_cfg,
-                        i_grasp_frame="grasp",         # Default values as in parser
-                        i_pre_grasp_offset=0.1
-                    )
-                    sequence.add_child(pickfront_module)
+                    # First pose: move back
+                    pose_cfg_1 = deepcopy(self.pose_map[value])
+                    pose_cfg_1.pose.x = pose_cfg_1.pose.x - 0.1
+                    pose_cfg_1.pose.pitch = -1.57
+                    
+                    # Second pose: adjust pitch
+                    pose_cfg_2 = deepcopy(self.pose_map[pose_cfg_1])
+                    pose_cfg_2.pose.z = pose_cfg_2.pose.z - 0.08
+
+                    # Third pose: move back
+                    pose_cfg_3 = deepcopy(self.pose_map[pose_cfg_2])
+                    pose_cfg_3.pose.x = pose_cfg_3.pose.x + 0.02
+                    
+                    pose_cfg_4 = deepcopy(self.pose_map[pose_cfg_3])
+                    pose_cfg_4.pose.x = pose_cfg_4.pose.x - 0.03
+                        
+                    # Create sequence with both poses
+                    pick_front_sequence = BehaviorModuleSequence()
+                    
+                    # Add first move
+                    pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_1))
+                    
+                    # Add second move
+                    pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_2))
+
+                    # Add third move
+                    pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_3))
+                    
+                    # Add gripper action
+                    pick_front_sequence.add_child(gripper(True))
+
+                    pick_front_sequence.add_child(MoveToPose(i_pose=pose_cfg_4))
+                    
+                    sequence.add_child(pick_front_sequence)
+                elif key == "Pick_Right":
+                    
+                    if value not in self.pose_map:
+                        raise ValueError(f"Invalid pose name for Pick_Right: {value}")
+
+                    # First pose: move to the Right
+                    pose_cfg_1 = deepcopy(self.pose_map[value])
+                    pose_cfg_1.pose.y = pose_cfg_1.pose.y - 0.1
+                    pose_cfg_1.pose.yaw = 1.57  # Rotate 90 degrees to face the Right
+                    
+                    # Second pose: adjust position for Right approach
+                    pose_cfg_2 = deepcopy(self.pose_map[pose_cfg_1])
+                    pose_cfg_2.pose.x = pose_cfg_2.pose.x - 0.05
+
+                    # Third pose: approach the object
+                    pose_cfg_3 = deepcopy(self.pose_map[pose_cfg_2])
+                    pose_cfg_3.pose.y = pose_cfg_3.pose.y + 0.08
+                    
+                    # Fourth pose: retreat with object
+                    pose_cfg_4 = deepcopy(self.pose_map[pose_cfg_3])
+                    pose_cfg_4.pose.y = pose_cfg_4.pose.y - 0.05
+                    pose_cfg_4.pose.z = pose_cfg_4.pose.z + 0.03
+                        
+                    # Create sequence for Right approach
+                    pick_Right_sequence = BehaviorModuleSequence()
+                    
+                    # Add first move
+                    pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_1))
+                    
+                    # Add second move
+                    pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_2))
+
+                    # Add third move
+                    pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_3))
+                    
+                    # Add gripper action
+                    pick_Right_sequence.add_child(gripper(True))
+
+                    # Add fourth move (retreat)
+                    pick_Right_sequence.add_child(MoveToPose(i_pose=pose_cfg_4))
+                    
+                    sequence.add_child(pick_Right_sequence)
                 elif key == "Place":
                     if value not in self.pose_map:
                         raise ValueError(f"Invalid pose name for Place: {value}")
@@ -120,12 +189,19 @@ class ExperimentsService:
                         i_pre_grasp_offset=0.1
                     )
                     sequence.add_child(place_module)
-
+                elif key == "PlaceObject":
+                    if value not in self.pose_map:
+                        raise ValueError(f"Invalid pose name for PlaceObject: {value}")
+                    
+                    # Use our new combined primitive
+                    sequence.add_child(self.pose_map.place_object_module(value))
                 elif key == "gripper":
                     sequence.add_child(gripper(value))
                 elif key == "rotate":
                     sequence.add_child(rotate(value))
                 elif key == "joint_state":
+                    sequence.add_child(joint_state(value))
+                elif key == "single_joint_state":
                     sequence.add_child(joint_state(value))
                 else:
                     raise ValueError(f"Unknown target action: {key}")

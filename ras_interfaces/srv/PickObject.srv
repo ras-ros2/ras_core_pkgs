@@ -1,0 +1,8 @@
+# Request
+geometry_msgs/Pose target_pose  # Target pose for picking
+bool grip_state                 # True for grip (close), false for release (open)
+
+---
+# Response
+bool success                    # Whether the operation was successful
+string message                  # Additional information about the operation 

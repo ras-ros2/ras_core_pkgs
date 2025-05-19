@@ -56,6 +56,7 @@ class BaTMan(Node):
             "Place": self.target_pose_map.place_module,
             "PlaceObject": self.target_pose_map.place_object_module,
             "PickObject": self.target_pose_map.pick_object_module,
+            "PickFront": self.target_pose_map.pick_front_module,
             "rotate": rotate,
             "gripper": gripper,
             "move2pose_sequence": self.target_pose_map.move2pose_sequence_module,

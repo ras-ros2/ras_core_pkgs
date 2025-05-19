@@ -119,3 +119,16 @@ class PickObject(PrimitiveInstruction):
     i_pose: PortPose
     i_grip_state: bool = True  # Default to True (close) for picking objects
     
+@dataclass
+class PickFront(PrimitiveInstruction):
+    """
+    Combined primitive for picking an object from the front (with -90 degree pitch adjustment).
+    This primitive is designed to move to a target pose (with pitch -90 deg from default) and control the gripper in one atomic step.
+
+    Attributes:
+        i_pose (PortPose): Target pose for picking the object from the front
+        i_grip_state (bool): Gripper state (default True for close/grip)
+    """
+    i_pose: PortPose
+    i_grip_state: bool = True  # Default to True (close) for picking objects from the front
+

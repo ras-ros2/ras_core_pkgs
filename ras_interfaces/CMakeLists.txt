@@ -49,6 +49,7 @@ set(srv_files
   "srv/ReportRobotState.srv"
   "srv/PlaceObject.srv"
   "srv/PickObject.srv"
+  "srv/PickFront.srv"
 )
 set(action_files
   "action/BTInterface.action"

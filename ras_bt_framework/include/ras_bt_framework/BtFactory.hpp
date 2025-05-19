@@ -37,6 +37,7 @@
 #include "ras_bt_framework/primitives/move_to_joint_state.hpp"
 #include "ras_bt_framework/primitives/place_object.hpp"
 #include "ras_bt_framework/primitives/pick_object.hpp"
+#include "ras_bt_framework/primitives/pick_front.hpp"
 
 #define REGISTER_NODE_TYPE_ROS(namespace,nodetype,rclnode) { factory->registerNodeType<namespace::nodetype>(#nodetype,rclnode); }
 #define REGISTER_NODE_TYPE(namespace,nodetype) { REGISTER_NODE_TYPE_ROS(namespace,nodetype,node); }
@@ -55,5 +56,6 @@ namespace ras_bt_framework {
         REGISTER_NODE_TYPE_PRIMITIVE(MoveToJointState);
         REGISTER_NODE_TYPE_PRIMITIVE(PlaceObject);
         REGISTER_NODE_TYPE_PRIMITIVE(PickObject);
+        REGISTER_NODE_TYPE_PRIMITIVE(PickFront);
     }
 }

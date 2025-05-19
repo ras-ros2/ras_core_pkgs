@@ -32,6 +32,11 @@ class PickObject(BehaviorModuleSequence):
         super().__init__()
         self.add_children(sequence_list)
 
+class PickFront(BehaviorModuleSequence):
+    def __init__(self, sequence_list):
+        super().__init__()
+        self.add_children(sequence_list)
+
 class RotateEffectorSequence(BehaviorModuleSequence):
     def __init__(self):
         super().__init__()

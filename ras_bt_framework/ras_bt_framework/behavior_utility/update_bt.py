@@ -24,7 +24,7 @@ from ras_bt_framework.managers.primitive_action_manager import PrimitiveActionMa
 from rclpy.node import Node
 from ..behavior_template.module import BehaviorModule, BehaviorModuleSequence, BehaviorModuleCollection
 
-from ..behaviors.primitives import MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PlaceObject, PickObject
+from ..behaviors.primitives import MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PlaceObject, PickObject, PickFront
 from ..generators.behavior_tree_generator import BehaviorTreeGenerator
 from copy import deepcopy
 from dataclasses import dataclass
@@ -35,7 +35,8 @@ mapping = {
     "Trigger": "Trigger",
     "RotateEffector": "ExecuteTrajectory",
     "MoveToJointState": "MoveToJointState",
-    "PickObject": "ExecuteTrajectory"  # Add mapping for PickObject
+    "PickObject": "ExecuteTrajectory",  # Add mapping for PickObject
+    "PickFront": "ExecuteTrajectory"
 }
 
 @dataclass
@@ -93,6 +94,31 @@ def update_bt(behavior: BehaviorModule, sequence=None):
                 grip_state = child.i_grip_state
                 new_children.append(Trigger(i_trigger=grip_state))
                 new_children.append(LoggerClientTrigger())
+            elif isinstance(child, PickFront):
+                # Handle PickFront primitive - convert to appropriate execution sequence
+                # First add the movement to the pose
+                new_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(new_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+                # Second: move to the lowered pose (z - 0.1)
+                lowered_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(lowered_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+                
+                # Then add the gripper control action
+                # Extract the grip_state value from the PickFront primitive
+                grip_state = child.i_grip_state
+                new_children.append(Trigger(i_trigger=grip_state))
+                new_children.append(LoggerClientTrigger())
+
+                safe_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(safe_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
             else:
                 raise ValueError(f"Invalid child type: {type(child)}")
         new_behavior = deepcopy(behavior)
@@ -142,7 +168,16 @@ def update_xml(element, sequence=1):
             # Then create a Trigger action for gripper control (for XML editing)
             # This would need more complex XML manipulation which we won't do here
             # since we handle this in the update_bt function instead
-            
+        
+        elif child.tag == "PickFront":
+            # Handle PickObject by splitting it into a move action and gripper action
+            # First create the move action
+            child.tag = "ExecuteTrajectory"
+            if "pose" in child.attrib:
+                child.set("sequence", str(sequence))
+                del child.attrib["pose"]
+                sequence += 1
+
         # Recursively process child elements
         sequence = update_xml(child, sequence)
     return sequence

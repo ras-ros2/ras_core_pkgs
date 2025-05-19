@@ -1,5 +1,5 @@
 from ..behavior_template.module import BehaviorModuleSequence
-from ..behaviors.primitives import MoveToPose,RotateEffector,Trigger, MoveToJointState, PlaceObject, PickObject
+from ..behaviors.primitives import MoveToPose,RotateEffector,Trigger, MoveToJointState, PlaceObject, PickObject, PickFront
 from ..behaviors.gen_primitives import Pick as PickPrimitive
 from ..behaviors.gen_primitives import Pick_Front as PickFrontPrimitive
 from ..behaviors.gen_primitives import Pick_Right as PickRightPrimitive
@@ -101,69 +101,69 @@ class TargetPoseMap(object):
             seq.add_child(gripper(True))  # False = close gripper
             return seq
 
-    def pick_front_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
-        """
-        Create a pick front behavior module. Supports two styles:
-        1. Direct PickFrontPrimitive (old style): give only pose name.
-        2. Sequence style: give name and target_name (used to move to pose and close gripper).
+    # def pick_front_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
+    #     """
+    #     Create a pick front behavior module. Supports two styles:
+    #     1. Direct PickFrontPrimitive (old style): give only pose name.
+    #     2. Sequence style: give name and target_name (used to move to pose and close gripper).
         
-        Args:
-            pose_or_name (str): If target_name is None, treated as pose name for PickFrontPrimitive. 
-                                Otherwise treated as sequence name.
-            target_name (str, optional): Target pose name to move to in the sequence.
-            grasp_frame (str): Grasp frame for PickFrontPrimitive (used only if target_name is None)
-            pre_grasp_offset (float): Pre-grasp offset (used only if target_name is None)
+    #     Args:
+    #         pose_or_name (str): If target_name is None, treated as pose name for PickFrontPrimitive. 
+    #                             Otherwise treated as sequence name.
+    #         target_name (str, optional): Target pose name to move to in the sequence.
+    #         grasp_frame (str): Grasp frame for PickFrontPrimitive (used only if target_name is None)
+    #         pre_grasp_offset (float): Pre-grasp offset (used only if target_name is None)
         
-        Returns:
-            BehaviorModuleSequence or PickFrontPrimitive: Pick_Front behavior module
+    #     Returns:
+    #         BehaviorModuleSequence or PickFrontPrimitive: Pick_Front behavior module
         
-        Raises:
-            ValueError: If the pose is invalid
-        """
-        if target_name is None:
-            # Handle PickFrontPrimitive version
-            if pose_or_name not in self.pose_map:
-                raise ValueError(f"Invalid pose name: {pose_or_name}")
+    #     Raises:
+    #         ValueError: If the pose is invalid
+    #     """
+    #     if target_name is None:
+    #         # Handle PickFrontPrimitive version
+    #         if pose_or_name not in self.pose_map:
+    #             raise ValueError(f"Invalid pose name: {pose_or_name}")
                 
-            # Create a sequence with two poses
-            seq = BehaviorModuleSequence(pose_or_name)
+    #         # Create a sequence with two poses
+    #         seq = BehaviorModuleSequence(pose_or_name)
             
-            # First pose: move back
-            pose_cfg_1 = deepcopy(self.pose_map[pose_or_name])
-            pose_cfg_1.pose.x = pose_cfg_1.pose.x - 0.08
-            seq.add_child(MoveToPose(i_pose=pose_cfg_1))
+    #         # First pose: move back
+    #         pose_cfg_1 = deepcopy(self.pose_map[pose_or_name])
+    #         pose_cfg_1.pose.x = pose_cfg_1.pose.x - 0.08
+    #         seq.add_child(MoveToPose(i_pose=pose_cfg_1))
             
-            # Second pose: adjust pitch
-            pose_cfg_2 = deepcopy(self.pose_map[pose_cfg_1])
-            pose_cfg_2.pose.pitch = -1.57
-            seq.add_child(MoveToPose(i_pose=pose_cfg_2))
+    #         # Second pose: adjust pitch
+    #         pose_cfg_2 = deepcopy(self.pose_map[pose_cfg_1])
+    #         pose_cfg_2.pose.pitch = -1.57
+    #         seq.add_child(MoveToPose(i_pose=pose_cfg_2))
 
-            # Third pose: move back
-            pose_cfg_3 = deepcopy(self.pose_map[pose_cfg_2])
-            pose_cfg_3.pose.z = pose_cfg_3.pose.z - 0.08
-            seq.add_child(MoveToPose(i_pose=pose_cfg_3))
+    #         # Third pose: move back
+    #         pose_cfg_3 = deepcopy(self.pose_map[pose_cfg_2])
+    #         pose_cfg_3.pose.z = pose_cfg_3.pose.z - 0.08
+    #         seq.add_child(MoveToPose(i_pose=pose_cfg_3))
             
-            # Add gripper action
-            seq.add_child(gripper(True))
+    #         # Add gripper action
+    #         seq.add_child(gripper(True))
             
-            return seq
-        else:
-            # Handle sequence version
-            seq = BehaviorModuleSequence(pose_or_name)
-            if target_name in self.pose_map:
-                # First pose: move back
-                pose_cfg_1 = deepcopy(self.pose_map[target_name])
-                pose_cfg_1.pose.x = pose_cfg_1.pose.x - 0.08
-                seq.add_child(MoveToPose(i_pose=pose_cfg_1))
+    #         return seq
+    #     else:
+    #         # Handle sequence version
+    #         seq = BehaviorModuleSequence(pose_or_name)
+    #         if target_name in self.pose_map:
+    #             # First pose: move back
+    #             pose_cfg_1 = deepcopy(self.pose_map[target_name])
+    #             pose_cfg_1.pose.x = pose_cfg_1.pose.x - 0.08
+    #             seq.add_child(MoveToPose(i_pose=pose_cfg_1))
                 
-                # Second pose: adjust pitch
-                pose_cfg_2 = deepcopy(self.pose_map[target_name])
-                pose_cfg_2.pose.pitch = -1.57
-                seq.add_child(MoveToPose(i_pose=pose_cfg_2))
-            else:
-                raise ValueError(f"Invalid target name: {target_name}")
-            seq.add_child(gripper(True))  # False = close gripper
-            return seq
+    #             # Second pose: adjust pitch
+    #             pose_cfg_2 = deepcopy(self.pose_map[target_name])
+    #             pose_cfg_2.pose.pitch = -1.57
+    #             seq.add_child(MoveToPose(i_pose=pose_cfg_2))
+    #         else:
+    #             raise ValueError(f"Invalid target name: {target_name}")
+    #         seq.add_child(gripper(True))  # False = close gripper
+    #         return seq
 
     def place_module(self, pose_or_name: str, target_name: str = None, grasp_frame: str = "grasp", pre_grasp_offset: float = 0.1):
         """
@@ -316,6 +316,32 @@ class TargetPoseMap(object):
         if isinstance(pose, str):
             if pose in self.pose_map:
                 return PickObject(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
+
+    def pick_front_module(self, pose:str, grip_state:bool=True):
+        """
+        Create a PickFront module for combined move and gripper control.
+        
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically closing it for picking objects).
+        
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to True for picking.
+            
+        Returns:
+            PickFront: Combined behavior module for picking objects
+            
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PickFront(i_pose=self.pose_map[pose], i_grip_state=grip_state)
             else:
                 raise ValueError(f"Invalid pose name {pose}")
         else:

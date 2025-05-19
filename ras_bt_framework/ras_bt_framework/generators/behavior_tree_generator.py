@@ -27,7 +27,7 @@ from dataclasses import dataclass,field
 from ras_common.xml_utils.behavior_tree_gen import BTXml,ElementTree
 from ..managers.primitive_action_manager import PrimitiveActionManager
 from ..managers.PortMan import PortMan
-from ..behaviors.primitives import PlaceObject, MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PickObject
+from ..behaviors.primitives import PlaceObject, MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PickObject, PickFront
 
 __registered_primitives : Set[type[PrimitiveInstruction]] = {
     MoveToPose,
@@ -37,7 +37,8 @@ __registered_primitives : Set[type[PrimitiveInstruction]] = {
     LoggerClientTrigger,
     MoveToJointState,
     PlaceObject,
-    PickObject
+    PickObject,
+    PickFront
 }
 
 @dataclass

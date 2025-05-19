@@ -86,6 +86,18 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
             "/pick_front",
             std::bind(&MoveitServer::pick_front_callback, this, std::placeholders::_1, std::placeholders::_2));
         
+        pick_right_srv_ = this->create_service<ras_interfaces::srv::PickRight>(
+            "/pick_right",
+            std::bind(&MoveitServer::pick_right_callback, this, std::placeholders::_1, std::placeholders::_2));
+        
+        pick_left_srv_ = this->create_service<ras_interfaces::srv::PickLeft>(
+            "/pick_left",
+            std::bind(&MoveitServer::pick_left_callback, this, std::placeholders::_1, std::placeholders::_2));
+        
+        pick_rear_srv_ = this->create_service<ras_interfaces::srv::PickRear>(
+            "/pick_rear",
+            std::bind(&MoveitServer::pick_rear_callback, this, std::placeholders::_1, std::placeholders::_2));
+        
         AddScenePlane();
         }
 
@@ -675,6 +687,291 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
       }
 
       RCLCPP_INFO(this->get_logger(), "Pick front operation completed successfully");
+  }
+
+  void MoveitServer::pick_right_callback(
+      const std::shared_ptr<ras_interfaces::srv::PickRight::Request> request,
+      std::shared_ptr<ras_interfaces::srv::PickRight::Response> response)
+  {
+      RCLCPP_INFO(this->get_logger(), "Received pick right request");
+
+      // target_pose.position.x = target_pose.position.x - 0.1;
+      // target_pose.position.pitch = -1.57;
+
+      // 1. Move to the target pose
+      RCLCPP_INFO(this->get_logger(), "Moving to pick pose: x=%f, y=%f, z=%f", 
+                  request->target_pose.position.x,
+                  request->target_pose.position.y += 0.12,
+                  request->target_pose.position.z);
+
+      // Convert current orientation quaternion to Euler angles
+      double roll, pitch, yaw;
+      tf2::Quaternion q(
+          request->target_pose.orientation.x,
+          request->target_pose.orientation.y,
+          request->target_pose.orientation.z,
+          request->target_pose.orientation.w);
+      tf2::Matrix3x3 m(q);
+      m.getRPY(roll, pitch, yaw);
+
+      // Modify pitch
+      roll -= 1.57;  // Subtract 1.57 radians (90 degrees)
+      pitch += 1.57;
+      // Convert back to quaternion
+      tf2::Quaternion q_new;
+      q_new.setRPY(roll, pitch, yaw);
+      request->target_pose.orientation.x = q_new.x();
+      request->target_pose.orientation.y = q_new.y();
+      request->target_pose.orientation.z = q_new.z();
+      request->target_pose.orientation.w = q_new.w();
+
+      bool move_success = Execute(request->target_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to pick pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to pick pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to pick pose");
+
+      // Step 3: Move to the next pose with z -= 0.1
+      geometry_msgs::msg::Pose lowered_pose = request->target_pose;
+      lowered_pose.position.y -= 0.045;
+
+      RCLCPP_INFO(this->get_logger(), "Moving to lowered pose: x=%f, y=%f, z=%f", 
+                  lowered_pose.position.x,
+                  lowered_pose.position.y,
+                  lowered_pose.position.z);
+
+      move_success = Execute(lowered_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to lowered pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to lowered pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to lowered pose");
+
+      // 2. Simulate gripper action directly
+      RCLCPP_INFO(this->get_logger(), "Simulating gripper action: %s", 
+                  request->grip_state ? "CLOSING gripper" : "OPENING gripper");
+      
+      // Add a short delay to simulate gripper action
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+      
+      RCLCPP_INFO(this->get_logger(), "Gripper action completed: %s", 
+                  request->grip_state ? "Gripper CLOSED" : "Gripper OPENED");
+      
+      // 3. Complete the operation
+      response->success = true;
+      response->message = "Pick right operation completed successfully";
+
+      // Step 3: Move to the next pose with z -= 0.1
+      geometry_msgs::msg::Pose safe_pose = request->target_pose;
+      safe_pose.position.z += 0.05;
+      // safe_pose.position.z += 0.05;
+
+      RCLCPP_INFO(this->get_logger(), "Moving to safe pose: x=%f, y=%f, z=%f", 
+                  safe_pose.position.x,
+                  safe_pose.position.y,
+                  safe_pose.position.z);
+
+      move_success = Execute(safe_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to safe pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to safe pose");
+          return;
+      }
+
+      RCLCPP_INFO(this->get_logger(), "Pick right operation completed successfully");
+  }
+
+  void MoveitServer::pick_left_callback(
+      const std::shared_ptr<ras_interfaces::srv::PickLeft::Request> request,
+      std::shared_ptr<ras_interfaces::srv::PickLeft::Response> response)
+  {
+      RCLCPP_INFO(this->get_logger(), "Received pick left request");
+
+      // 1. Move to the target pose
+      RCLCPP_INFO(this->get_logger(), "Moving to pick pose: x=%f, y=%f, z=%f", 
+                  request->target_pose.position.x,
+                  request->target_pose.position.y -= 0.12,
+                  request->target_pose.position.z);
+
+      // Convert current orientation quaternion to Euler angles
+      double roll, pitch, yaw;
+      tf2::Quaternion q(
+          request->target_pose.orientation.x,
+          request->target_pose.orientation.y,
+          request->target_pose.orientation.z,
+          request->target_pose.orientation.w);
+      tf2::Matrix3x3 m(q);
+      m.getRPY(roll, pitch, yaw);
+
+      // Modify pitch
+      roll -= 4.71;  // Add 1.57 radians (90 degrees) for left
+      pitch -= 1.57;
+      // Convert back to quaternion
+      tf2::Quaternion q_new;
+      q_new.setRPY(roll, pitch, yaw);
+      request->target_pose.orientation.x = q_new.x();
+      request->target_pose.orientation.y = q_new.y();
+      request->target_pose.orientation.z = q_new.z();
+      request->target_pose.orientation.w = q_new.w();
+
+      bool move_success = Execute(request->target_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to pick pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to pick pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to pick pose");
+
+      // Step 3: Move to the next pose with y -= 0.03
+      geometry_msgs::msg::Pose lowered_pose = request->target_pose;
+      lowered_pose.position.y += 0.05;
+
+      RCLCPP_INFO(this->get_logger(), "Moving to lowered pose: x=%f, y=%f, z=%f", 
+                  lowered_pose.position.x,
+                  lowered_pose.position.y,
+                  lowered_pose.position.z);
+
+      move_success = Execute(lowered_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to lowered pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to lowered pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to lowered pose");
+
+      // 2. Simulate gripper action directly
+      RCLCPP_INFO(this->get_logger(), "Simulating gripper action: %s", 
+                  request->grip_state ? "CLOSING gripper" : "OPENING gripper");
+      
+      // Add a short delay to simulate gripper action
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+      
+      RCLCPP_INFO(this->get_logger(), "Gripper action completed: %s", 
+                  request->grip_state ? "Gripper CLOSED" : "Gripper OPENED");
+      
+      // 3. Complete the operation
+      response->success = true;
+      response->message = "Pick left operation completed successfully";
+
+      // Step 3: Move to the next pose with z += 0.05
+      geometry_msgs::msg::Pose safe_pose = request->target_pose;
+      safe_pose.position.z += 0.045;
+
+      RCLCPP_INFO(this->get_logger(), "Moving to safe pose: x=%f, y=%f, z=%f", 
+                  safe_pose.position.x,
+                  safe_pose.position.y,
+                  safe_pose.position.z);
+
+      move_success = Execute(safe_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to safe pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to safe pose");
+          return;
+      }
+
+      RCLCPP_INFO(this->get_logger(), "Pick left operation completed successfully");
+  }
+
+  void MoveitServer::pick_rear_callback(
+      const std::shared_ptr<ras_interfaces::srv::PickRear::Request> request,
+      std::shared_ptr<ras_interfaces::srv::PickRear::Response> response)
+  {
+      RCLCPP_INFO(this->get_logger(), "Received pick rear request");
+
+      // 1. Move to the target pose (approach from rear)
+      RCLCPP_INFO(this->get_logger(), "Moving to pick pose: x=%f, y=%f, z=%f", 
+                  request->target_pose.position.x += 0.1,
+                  request->target_pose.position.y,
+                  request->target_pose.position.z);
+
+      // Convert current orientation quaternion to Euler angles
+      double roll, pitch, yaw;
+      tf2::Quaternion q(
+          request->target_pose.orientation.x,
+          request->target_pose.orientation.y,
+          request->target_pose.orientation.z,
+          request->target_pose.orientation.w);
+      tf2::Matrix3x3 m(q);
+      m.getRPY(roll, pitch, yaw);
+
+      // Modify yaw for rear approach (add 180 degrees)
+      pitch += 1.57;
+      // Convert back to quaternion
+      tf2::Quaternion q_new;
+      q_new.setRPY(roll, pitch, yaw);
+      request->target_pose.orientation.x = q_new.x();
+      request->target_pose.orientation.y = q_new.y();
+      request->target_pose.orientation.z = q_new.z();
+      request->target_pose.orientation.w = q_new.w();
+
+      bool move_success = Execute(request->target_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to pick pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to pick pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to pick pose");
+
+      // Step 3: Move to the next pose with x += 0.03
+      geometry_msgs::msg::Pose lowered_pose = request->target_pose;
+      lowered_pose.position.x -= 0.03;
+
+      RCLCPP_INFO(this->get_logger(), "Moving to lowered pose: x=%f, y=%f, z=%f", 
+                  lowered_pose.position.x,
+                  lowered_pose.position.y,
+                  lowered_pose.position.z);
+
+      move_success = Execute(lowered_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to lowered pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to lowered pose");
+          return;
+      }
+      RCLCPP_INFO(this->get_logger(), "Successfully moved to lowered pose");
+
+      // 2. Simulate gripper action directly
+      RCLCPP_INFO(this->get_logger(), "Simulating gripper action: %s", 
+                  request->grip_state ? "CLOSING gripper" : "OPENING gripper");
+      
+      // Add a short delay to simulate gripper action
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+      
+      RCLCPP_INFO(this->get_logger(), "Gripper action completed: %s", 
+                  request->grip_state ? "Gripper CLOSED" : "Gripper OPENED");
+      
+      // 3. Complete the operation
+      response->success = true;
+      response->message = "Pick rear operation completed successfully";
+
+      // Step 3: Move to the next pose with z += 0.05
+      geometry_msgs::msg::Pose safe_pose = request->target_pose;
+      safe_pose.position.z += 0.05;
+
+      RCLCPP_INFO(this->get_logger(), "Moving to safe pose: x=%f, y=%f, z=%f", 
+                  safe_pose.position.x,
+                  safe_pose.position.y,
+                  safe_pose.position.z);
+
+      move_success = Execute(safe_pose);
+      if (!move_success) {
+          response->success = false;
+          response->message = "Failed to move to safe pose";
+          RCLCPP_ERROR(this->get_logger(), "Failed to move to safe pose");
+          return;
+      }
+
+      RCLCPP_INFO(this->get_logger(), "Pick rear operation completed successfully");
   }
 
 int main(int argc, char **argv) {

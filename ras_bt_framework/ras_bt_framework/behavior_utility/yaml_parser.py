@@ -163,83 +163,6 @@ def read_yaml_to_pose_dict(path):
                     target_pose.append({"gripper": True})
                 else:
                     raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "Pick_Front":
-                if value in pose_dict:
-
-                    front_pose_1 = copy.deepcopy(pose_dict[value])
-                    front_pose_1.pose.x = front_pose_1.pose.x - 0.1
-                    front_pose_1.pose.pitch = -1.57
-                    # Register the modified pose with a new name
-                    front_pose_name_1 = f"{value}_front_1"
-                    pose_dict[front_pose_name_1] = front_pose_1
-                    target_pose.append({"move2pose": front_pose_name_1})
-
-                    # Create a deep copy of the pose and modify the pitch, x, and z
-                    front_pose_2 = copy.deepcopy(pose_dict[front_pose_name_1])
-                    front_pose_2.pose.z = front_pose_2.pose.z - 0.08
-                    # Register the modified pose with a new name
-                    front_pose_name_2 = f"{value}_front_2"
-                    pose_dict[front_pose_name_2] = front_pose_2
-                    target_pose.append({"move2pose": front_pose_name_2})
-
-                    front_pose_3 = copy.deepcopy(pose_dict[front_pose_name_2])
-                    front_pose_3.pose.x = front_pose_3.pose.x + 0.02
-                    # Register the modified pose with a new name
-                    front_pose_name_3 = f"{value}_front_3"
-                    pose_dict[front_pose_name_3] = front_pose_3
-                    # Pick_Front is translated to move2pose with the new pose name + close gripper
-                    target_pose.append({"move2pose": front_pose_name_3})
-                    target_pose.append({"gripper": True})
-
-                    front_pose_4 = copy.deepcopy(pose_dict[front_pose_name_3])
-                    front_pose_4.pose.x = front_pose_4.pose.x - 0.03
-                    front_pose_4.pose.z = front_pose_4.pose.z + 0.03
-                    front_pose_name_4 = f"{value}_front_4"
-                    pose_dict[front_pose_name_4] = front_pose_4
-                    target_pose.append({"move2pose": front_pose_name_4})
-
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "Pick_Right":
-                if value in pose_dict:
-                    # Create a sequence of poses for side approach
-                    # First pose: move to the side
-                    side_pose_1 = copy.deepcopy(pose_dict[value])
-                    side_pose_1.pose.y = side_pose_1.pose.y + 0.12
-                    side_pose_1.pose.z = side_pose_1.pose.z - 0.06
-                    side_pose_1.pose.roll = 1.57  # Rotate 90 degrees to face the side
-                    # Register the modified pose with a new name
-                    side_pose_name_1 = f"{value}_side_1"
-                    pose_dict[side_pose_name_1] = side_pose_1
-                    target_pose.append({"move2pose": side_pose_name_1})
-
-                    # Second pose: adjust position for side approach
-                    side_pose_2 = copy.deepcopy(pose_dict[side_pose_name_1])
-                    side_pose_2.pose.pitch = 1.57
-                    # Register the modified pose with a new name
-                    side_pose_name_2 = f"{value}_side_2"
-                    pose_dict[side_pose_name_2] = side_pose_2
-                    target_pose.append({"move2pose": side_pose_name_2})
-
-                    # Third pose: approach the object
-                    side_pose_3 = copy.deepcopy(pose_dict[side_pose_name_2])
-                    side_pose_3.pose.y = side_pose_3.pose.y - 0.05
-                    # Register the modified pose with a new name
-                    side_pose_name_3 = f"{value}_side_3"
-                    pose_dict[side_pose_name_3] = side_pose_3
-                    # Pick_Right is translated to move2pose with the new pose name + close gripper
-                    target_pose.append({"move2pose": side_pose_name_3})
-                    target_pose.append({"gripper": True})
-
-                    # Fourth pose: retreat with object
-                    side_pose_4 = copy.deepcopy(pose_dict[side_pose_name_3])
-                    side_pose_4.pose.y = side_pose_4.pose.y + 0.05
-                    side_pose_4.pose.z = side_pose_4.pose.z + 0.03
-                    side_pose_name_4 = f"{value}_side_4"
-                    pose_dict[side_pose_name_4] = side_pose_4
-                    target_pose.append({"move2pose": side_pose_name_4})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
             elif key == "Place":
                 if value in pose_dict:
                     # Place is translated to move2pose + open gripper
@@ -266,6 +189,27 @@ def read_yaml_to_pose_dict(path):
                 if value in pose_dict:
                     # PickFront is a single action (not decomposed)
                     target_pose.append({"PickFront": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickRight":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickRight is a single action (not decomposed)
+                    target_pose.append({"PickRight": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickLeft":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickRight is a single action (not decomposed)
+                    target_pose.append({"PickLeft": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickRear":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickRight is a single action (not decomposed)
+                    target_pose.append({"PickRear": value})
                 else:
                     raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
             elif key == "single_joint_state":

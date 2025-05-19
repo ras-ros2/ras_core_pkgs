@@ -37,6 +37,21 @@ class PickFront(BehaviorModuleSequence):
         super().__init__()
         self.add_children(sequence_list)
 
+class PickRight(BehaviorModuleSequence):
+    def __init__(self, sequence_list):
+        super().__init__()
+        self.add_children(sequence_list)
+
+class PickLeft(BehaviorModuleSequence):
+    def __init__(self, sequence_list):
+        super().__init__()
+        self.add_children(sequence_list)
+
+class PickRear(BehaviorModuleSequence):
+    def __init__(self, sequence_list):
+        super().__init__()
+        self.add_children(sequence_list)
+
 class RotateEffectorSequence(BehaviorModuleSequence):
     def __init__(self):
         super().__init__()

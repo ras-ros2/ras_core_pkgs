@@ -4,6 +4,4 @@
 #include "gen_primitives/move2pose.hpp"
 #include "gen_primitives/Move.hpp"
 #include "gen_primitives/Pick.hpp"
-#include "gen_primitives/Pick_Front.hpp"
-#include "gen_primitives/Pick_Right.hpp"
 #include "gen_primitives/Place.hpp"

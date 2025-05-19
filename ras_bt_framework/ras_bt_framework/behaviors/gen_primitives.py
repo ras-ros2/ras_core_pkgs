@@ -24,18 +24,6 @@ class Pick(PrimitiveInstruction):
 	o_status : str
 
 @dataclass
-class Pick_Front(PrimitiveInstruction):
-	i_pose : str
-	i_trigger: str
-	o_status : str
-
-@dataclass
-class Pick_Right(PrimitiveInstruction):
-	i_pose : str
-	i_trigger: str
-	o_status : str
-
-@dataclass
 class Place(PrimitiveInstruction):
 	i_pose : str
 	i_trigger: str

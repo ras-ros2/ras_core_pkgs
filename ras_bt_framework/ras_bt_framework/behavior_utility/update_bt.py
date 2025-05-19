@@ -24,7 +24,7 @@ from ras_bt_framework.managers.primitive_action_manager import PrimitiveActionMa
 from rclpy.node import Node
 from ..behavior_template.module import BehaviorModule, BehaviorModuleSequence, BehaviorModuleCollection
 
-from ..behaviors.primitives import MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PlaceObject, PickObject, PickFront
+from ..behaviors.primitives import MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PlaceObject, PickObject, PickFront, PickRight, PickLeft, PickRear
 from ..generators.behavior_tree_generator import BehaviorTreeGenerator
 from copy import deepcopy
 from dataclasses import dataclass
@@ -36,7 +36,10 @@ mapping = {
     "RotateEffector": "ExecuteTrajectory",
     "MoveToJointState": "MoveToJointState",
     "PickObject": "ExecuteTrajectory",  # Add mapping for PickObject
-    "PickFront": "ExecuteTrajectory"
+    "PickFront": "ExecuteTrajectory",
+    "PickRight": "ExecuteTrajectory",
+    "PickLeft": "ExecuteTrajectory",
+    "PickRear": "ExecuteTrajectory"
 }
 
 @dataclass
@@ -106,10 +109,84 @@ def update_bt(behavior: BehaviorModule, sequence=None):
                 lowered_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
                 new_children.append(lowered_pose_child)
                 new_children.append(LoggerClientTrigger())
+                
+                # Then add the gripper control action
+                # Extract the grip_state value from the PickFront primitive
+                grip_state = child.i_grip_state
+                new_children.append(Trigger(i_trigger=grip_state))
+                new_children.append(LoggerClientTrigger())
+
+                safe_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(safe_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+            elif isinstance(child, PickRight):
+                # Handle PickFront primitive - convert to appropriate execution sequence
+                # First add the movement to the pose
+                new_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(new_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+                # Second: move to the lowered pose (z - 0.1)
+                lowered_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(lowered_pose_child)
+                new_children.append(LoggerClientTrigger())
                 sequence.inc()
                 
                 # Then add the gripper control action
                 # Extract the grip_state value from the PickFront primitive
+                grip_state = child.i_grip_state
+                new_children.append(Trigger(i_trigger=grip_state))
+                new_children.append(LoggerClientTrigger())
+
+                safe_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(safe_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+            elif isinstance(child, PickLeft):
+                # Handle PickLeft primitive - convert to appropriate execution sequence
+                # First add the movement to the pose
+                new_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(new_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+                # Second: move to the lowered pose (z - 0.1)
+                lowered_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(lowered_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+                
+                # Then add the gripper control action
+                # Extract the grip_state value from the PickLeft primitive
+                grip_state = child.i_grip_state
+                new_children.append(Trigger(i_trigger=grip_state))
+                new_children.append(LoggerClientTrigger())
+
+                safe_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(safe_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+            elif isinstance(child, PickRear):
+                # Handle PickRear primitive - convert to appropriate execution sequence
+                # First add the movement to the pose
+                new_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(new_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+
+                # Second: move to the lowered pose (z - 0.1)
+                lowered_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
+                new_children.append(lowered_pose_child)
+                new_children.append(LoggerClientTrigger())
+                sequence.inc()
+                
+                # Then add the gripper control action
+                # Extract the grip_state value from the PickRear primitive
                 grip_state = child.i_grip_state
                 new_children.append(Trigger(i_trigger=grip_state))
                 new_children.append(LoggerClientTrigger())
@@ -171,6 +248,33 @@ def update_xml(element, sequence=1):
         
         elif child.tag == "PickFront":
             # Handle PickObject by splitting it into a move action and gripper action
+            # First create the move action
+            child.tag = "ExecuteTrajectory"
+            if "pose" in child.attrib:
+                child.set("sequence", str(sequence))
+                del child.attrib["pose"]
+                sequence += 1
+
+        elif child.tag == "PickRight":
+            # Handle PickObject by splitting it into a move action and gripper action
+            # First create the move action
+            child.tag = "ExecuteTrajectory"
+            if "pose" in child.attrib:
+                child.set("sequence", str(sequence))
+                del child.attrib["pose"]
+                sequence += 1
+
+        elif child.tag == "PickLeft":
+            # Handle PickLeft by splitting it into a move action and gripper action
+            # First create the move action
+            child.tag = "ExecuteTrajectory"
+            if "pose" in child.attrib:
+                child.set("sequence", str(sequence))
+                del child.attrib["pose"]
+                sequence += 1
+
+        elif child.tag == "PickRear":
+            # Handle PickRear by splitting it into a move action and gripper action
             # First create the move action
             child.tag = "ExecuteTrajectory"
             if "pose" in child.attrib:

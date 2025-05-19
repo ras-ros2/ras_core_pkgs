@@ -34,6 +34,9 @@
 #include <ras_interfaces/srv/place_object.hpp>
 #include <ras_interfaces/srv/pick_object.hpp>
 #include <ras_interfaces/srv/pick_front.hpp>
+#include <ras_interfaces/srv/pick_right.hpp>
+#include <ras_interfaces/srv/pick_left.hpp>
+#include <ras_interfaces/srv/pick_rear.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_stamped.h>
@@ -64,6 +67,9 @@ public:
     void place_object_callback(const std::shared_ptr<ras_interfaces::srv::PlaceObject::Request> request, std::shared_ptr<ras_interfaces::srv::PlaceObject::Response> response);
     void pick_object_callback(const std::shared_ptr<ras_interfaces::srv::PickObject::Request> request, std::shared_ptr<ras_interfaces::srv::PickObject::Response> response);
     void pick_front_callback(const std::shared_ptr<ras_interfaces::srv::PickFront::Request> request, std::shared_ptr<ras_interfaces::srv::PickFront::Response> response);
+    void pick_right_callback(const std::shared_ptr<ras_interfaces::srv::PickRight::Request> request, std::shared_ptr<ras_interfaces::srv::PickRight::Response> response);
+    void pick_left_callback(const std::shared_ptr<ras_interfaces::srv::PickLeft::Request> request, std::shared_ptr<ras_interfaces::srv::PickLeft::Response> response);
+    void pick_rear_callback(const std::shared_ptr<ras_interfaces::srv::PickRear::Request> request, std::shared_ptr<ras_interfaces::srv::PickRear::Response> response);
     void joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
     void sync_callback(const std::shared_ptr<ras_interfaces::srv::JointSat::Request> request,std::shared_ptr<ras_interfaces::srv::JointSat::Response> response);
     void set_constraints(const geometry_msgs::msg::Pose::_orientation_type& quat);
@@ -92,6 +98,9 @@ private:
     rclcpp::Service<ras_interfaces::srv::PlaceObject>::SharedPtr place_object_srv_;
     rclcpp::Service<ras_interfaces::srv::PickObject>::SharedPtr pick_object_srv_;
     rclcpp::Service<ras_interfaces::srv::PickFront>::SharedPtr pick_front_srv_;
+    rclcpp::Service<ras_interfaces::srv::PickRight>::SharedPtr pick_right_srv_;
+    rclcpp::Service<ras_interfaces::srv::PickLeft>::SharedPtr pick_left_srv_;
+    rclcpp::Service<ras_interfaces::srv::PickRear>::SharedPtr pick_rear_srv_;
 
     std::vector<float> joint_angle;
     std::string collision_object_frame;

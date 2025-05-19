@@ -132,3 +132,41 @@ class PickFront(PrimitiveInstruction):
     i_pose: PortPose
     i_grip_state: bool = True  # Default to True (close) for picking objects from the front
 
+@dataclass
+class PickRight(PrimitiveInstruction):
+    """
+    Combined primitive for picking an object from the right.
+    This primitive is designed to move to a target pose and control the gripper in one atomic step.
+
+    Attributes:
+        i_pose (PortPose): Target pose for picking the object from the right
+        i_grip_state (bool): Gripper state (default True for close/grip)
+    """
+    i_pose: PortPose
+    i_grip_state: bool = True  # Default to True (close) for picking objects from the right
+
+@dataclass
+class PickLeft(PrimitiveInstruction):
+    """
+    Combined primitive for picking an object from the left.
+    This primitive is designed to move to a target pose and control the gripper in one atomic step.
+
+    Attributes:
+        i_pose (PortPose): Target pose for picking the object from the left
+        i_grip_state (bool): Gripper state (default True for close/grip)
+    """
+    i_pose: PortPose
+    i_grip_state: bool = True  # Default to True (close) for picking objects from the left
+
+@dataclass
+class PickRear(PrimitiveInstruction):
+    """
+    Combined primitive for picking an object from the rear.
+    This primitive is designed to move to a target pose and control the gripper in one atomic step.
+
+    Attributes:
+        i_pose (PortPose): Target pose for picking the object from the rear
+        i_grip_state (bool): Gripper state (default True for close/grip)
+    """
+    i_pose: PortPose
+    i_grip_state: bool = True  # Default to True (close) for picking objects from the rear

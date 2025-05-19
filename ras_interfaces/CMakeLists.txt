@@ -50,6 +50,9 @@ set(srv_files
   "srv/PlaceObject.srv"
   "srv/PickObject.srv"
   "srv/PickFront.srv"
+  "srv/PickRight.srv"
+  "srv/PickLeft.srv"
+  "srv/PickRear.srv"
 )
 set(action_files
   "action/BTInterface.action"

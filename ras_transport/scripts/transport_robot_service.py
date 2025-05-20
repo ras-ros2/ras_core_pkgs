@@ -28,6 +28,8 @@ from std_srvs.srv import SetBool
 import json
 import time
 from ras_logging.ras_logger import RasLogger
+import yaml
+
 class TransportCommands(Enum):
     HOME = "home"
     SYNC = "sync"
@@ -74,7 +76,7 @@ class TransportRobotService(Node):
             self.logger.log_info("Executing Home command")
             req : JointReq.Request = JointReq.Request()
             LabSetup.init()
-            home_joint_state: Dict[str, float|int] = LabSetup.conf.robot.home_joint_state
+            home_joint_state: Dict[str, float|int] = LabSetup.robot_config.home_joint_state
             req.joints.header.stamp = self.get_clock().now().to_msg()
             req.joints.name = list(home_joint_state.keys())
             req.joints.position = [float(value) for value in home_joint_state.values()]

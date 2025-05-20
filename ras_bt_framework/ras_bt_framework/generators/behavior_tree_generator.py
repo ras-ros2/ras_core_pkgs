@@ -27,8 +27,22 @@ from dataclasses import dataclass,field
 from ras_common.xml_utils.behavior_tree_gen import BTXml,ElementTree
 from ..managers.primitive_action_manager import PrimitiveActionManager
 from ..managers.PortMan import PortMan
+from ..behaviors.primitives import PlaceObject, MoveToPose, Trigger, RotateEffector, ExecuteTrajectory, LoggerClientTrigger, MoveToJointState, PickObject, PickFront, PickRight, PickLeft, PickRear
 
-__registered_primitives : Set[type[PrimitiveInstruction]] = {}
+__registered_primitives : Set[type[PrimitiveInstruction]] = {
+    MoveToPose,
+    Trigger,
+    RotateEffector, 
+    ExecuteTrajectory,
+    LoggerClientTrigger,
+    MoveToJointState,
+    PlaceObject,
+    PickObject,
+    PickFront,
+    PickRight,
+    PickLeft,
+    PickRear
+}
 
 @dataclass
 class BehaviorTreeGenerator(object):

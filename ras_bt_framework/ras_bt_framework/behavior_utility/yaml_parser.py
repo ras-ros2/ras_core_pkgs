@@ -170,6 +170,48 @@ def read_yaml_to_pose_dict(path):
                     target_pose.append({"gripper": False})
                 else:
                     raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PlaceObject":
+                # New unified place action that combines move + gripper control
+                if value in pose_dict:
+                    # PlaceObject is a single action (not decomposed)
+                    target_pose.append({"PlaceObject": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickObject":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickObject is a single action (not decomposed)
+                    target_pose.append({"PickObject": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickFront":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickFront is a single action (not decomposed)
+                    target_pose.append({"PickFront": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickRight":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickRight is a single action (not decomposed)
+                    target_pose.append({"PickRight": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickLeft":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickRight is a single action (not decomposed)
+                    target_pose.append({"PickLeft": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
+            elif key == "PickRear":
+                # New unified pick action that combines move + gripper control
+                if value in pose_dict:
+                    # PickRight is a single action (not decomposed)
+                    target_pose.append({"PickRear": value})
+                else:
+                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
             elif key == "single_joint_state":
                 # Format should be [joint_index, joint_value]
                 if isinstance(value, list) and len(value) == 2:

@@ -7,6 +7,8 @@ from ..behaviors.ports import PortPoseCfg
 from ras_common.config.loaders.lab_setup import LabSetup
 from ras_common.config.loaders.objects import ObjectTypes
 from .behavior_utility.yaml_parser import read_yaml_to_pose_dict
+from copy import deepcopy
+from ..behaviors.keywords import MoveToPose
 
 class BatMan:
     """
@@ -100,7 +102,7 @@ class BatMan:
                     sequence.add_child(self.pose_map.move2pose_module(pose_name))
                     sequence.add_child(gripper("close"))
                 elif key == "Place":
-                    # Composite action: move to pose and close gripper
+                    # Composite action: move to pose and open gripper
                     if isinstance(value, dict):
                         pose_name = value.get("pose")
                     else:
@@ -108,6 +110,14 @@ class BatMan:
 
                     sequence.add_child(self.pose_map.move2pose_module(pose_name))
                     sequence.add_child(gripper("open"))
+                elif key == "PlaceObject":
+                    # Use the unified primitive that combines movement and gripper control
+                    if isinstance(value, dict):
+                        pose_name = value.get("pose")
+                    else:
+                        pose_name = value
+                        
+                    sequence.add_child(self.pose_map.place_object_module(pose_name))
                 else:
                     raise ValueError(f"Unknown target action: {key}")
             else:

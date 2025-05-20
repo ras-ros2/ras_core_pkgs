@@ -1,5 +1,5 @@
 from ..behavior_template.module import BehaviorModuleSequence
-from ..behaviors.primitives import MoveToPose,RotateEffector,Trigger, MoveToJointState
+from ..behaviors.primitives import MoveToPose,RotateEffector,Trigger, MoveToJointState, PlaceObject, PickObject, PickFront, PickRight, PickLeft, PickRear
 from ..behaviors.gen_primitives import Pick as PickPrimitive
 from ..behaviors.gen_primitives import Place as PlacePrimitive
 from ..behaviors.modules import PickSequence,PlaceSequence
@@ -130,6 +130,154 @@ class TargetPoseMap(object):
             seq.add_child(self.move2pose_module(target_name))
             seq.add_child(gripper(False))  # False = close gripper
             return seq
+
+    def place_object_module(self, pose:str, grip_state:bool=False):
+        """
+        Create a PlaceObject module for combined move and gripper control.
+        
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically opening it for placing objects).
+        
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to False for placing.
+            
+        Returns:
+            PlaceObject: Combined behavior module for placing objects
+            
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PlaceObject(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
+
+    def pick_object_module(self, pose:str, grip_state:bool=True):
+        """
+        Create a PickObject module for combined move and gripper control.
+        
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically closing it for picking objects).
+        
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to True for picking.
+            
+        Returns:
+            PickObject: Combined behavior module for picking objects
+            
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PickObject(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
+
+    def pick_front_module(self, pose:str, grip_state:bool=True):
+        """
+        Create a PickFront module for combined move and gripper control.
+        
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically closing it for picking objects).
+        
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to True for picking.
+            
+        Returns:
+            PickFront: Combined behavior module for picking objects
+            
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PickFront(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
+    
+    def pick_right_module(self, pose:str, grip_state:bool=True):
+        """
+        Create a PickRight module for combined move and gripper control.
+        
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically closing it for picking objects).
+        
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to True for picking.
+            
+        Returns:
+            PickRight: Combined behavior module for picking objects
+            
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PickRight(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
+
+    def pick_left_module(self, pose:str, grip_state:bool=True):
+        """
+        Create a PickLeft module for combined move and gripper control.
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically closing it for picking objects).
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to True for picking.
+        Returns:
+            PickLeft: Combined behavior module for picking objects
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PickLeft(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
+
+    def pick_rear_module(self, pose:str, grip_state:bool=True):
+        """
+        Create a PickRear module for combined move and gripper control.
+        This is a single step primitive that both moves to the target pose and
+        controls the gripper (typically closing it for picking objects).
+        Args:
+            pose (str): Name of the registered pose to move to
+            grip_state (bool, optional): Gripper state (True=close, False=open). 
+                                        Defaults to True for picking.
+        Returns:
+            PickRear: Combined behavior module for picking objects
+        Raises:
+            ValueError: If pose name is invalid
+        """
+        if isinstance(pose, str):
+            if pose in self.pose_map:
+                return PickRear(i_pose=self.pose_map[pose], i_grip_state=grip_state)
+            else:
+                raise ValueError(f"Invalid pose name {pose}")
+        else:
+            raise ValueError(f"Invalid pose input type {type(pose)}")
 
 def rotate(angle:float):
     """

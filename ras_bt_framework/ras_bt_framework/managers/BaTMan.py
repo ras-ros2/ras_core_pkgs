@@ -191,7 +191,7 @@ class BaTMan(Node):
         bt_path = str(bt_path)
         self.logger.log_info("Executing BT at path: {0}".format(bt_path))
         self.send_goal(bt_path)
-        time.sleep(2)
+        time.sleep(0.1)
         return self.tick_loop()
 
     def run_module(self, path: Path, behavior: BehaviorModuleSequence = None):

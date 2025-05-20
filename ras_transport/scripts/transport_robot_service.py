@@ -42,7 +42,7 @@ class TransportRobotService(Node):
         
         self.sync_robot_client = TransportServiceClient("sync_robot")
         self.connect_aws()
-        time.sleep(2) # wait for 2 seconds
+        time.sleep(0.1) # wait for 0.1 seconds
         self.first_sync_robot()
 
     def first_sync_robot(self):

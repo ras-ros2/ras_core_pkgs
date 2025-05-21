@@ -21,7 +21,8 @@ from ..generators.behavior_tree_generator import BehaviorTreeGenerator
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_CONFIGS_PATH
 import time
-from ..behaviors.modules import BehaviorModuleSequence
+# from ..behaviors.modules import BehaviorModuleSequence
+from ..behavior_template.module import BehaviorModuleSequence
 import threading
 from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
@@ -31,6 +32,7 @@ import subprocess
 from ras_logging.ras_logger import RasLogger
 from ras_interfaces.srv import ReportRobotState
 from std_srvs.srv import Trigger
+from ras_bt_framework.config import action_mapping
 
 class ExperimentService(Node):
     """
@@ -124,7 +126,11 @@ class ExperimentService(Node):
                 path = os.path.join(RAS_CONFIGS_PATH, "experiments", f"{exp_id}.yaml")
                 if Path(path).exists():
                     self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
-                    self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
+                    # Register all poses
+                    if self.pose_dict is not None:
+                        for pose_name, pose in self.pose_dict.items():
+                            action_mapping.register_pose(pose_name, pose)
+                    # self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
                     self.current_step_index = step_idx
                     self.total_steps = len(self.target_sequence)
                     self.sim_complete = False
@@ -235,7 +241,26 @@ class ExperimentService(Node):
         
         # Generate module for single step
         step_module = BehaviorModuleSequence()
-        self.batman.keyword_module_gen.generate_into(step_module, step_name, current_step)
+        for step in current_step:
+            # If step is a dict like {'PlaceObject': 'above1'}
+            if isinstance(step, dict):
+                for keyword, params in step.items():
+                    if keyword in action_mapping._mappings:
+                        # If params is a dict, pass as kwargs; else as a single argument
+                        if isinstance(params, dict):
+                            action = action_mapping.get_action(keyword)(**params)
+                        else:
+                            action = action_mapping.get_action(keyword)(params)
+                        step_module.add_child(action)
+                    else:
+                        self.logger.log_warn(f"Unknown keyword: {keyword}")
+            # If step is just a string keyword
+            elif isinstance(step, str):
+                if step in action_mapping._mappings:
+                    action = action_mapping.get_action(step)()
+                    step_module.add_child(action)
+                else:
+                    self.logger.log_warn(f"Unknown keyword: {step}")
         
         # Generate XML for simulation
         self.logger.log_info(f"Generating simulation trajectory for step {self.current_step_index + 1}...")
@@ -604,7 +629,11 @@ class ExperimentService(Node):
         # self.logger.log_info(f"Saved current experiment ID {exp_id} to {current_exp_path}")
         
         self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
-        self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
+        # Register all poses
+        if self.pose_dict is not None:
+            for pose_name, pose in self.pose_dict.items():
+                action_mapping.register_pose(pose_name, pose)
+        # self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
         
         self.current_step_index = 0
         self.total_steps = len(self.target_sequence)

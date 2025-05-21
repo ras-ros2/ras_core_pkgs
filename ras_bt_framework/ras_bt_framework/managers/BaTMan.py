@@ -1,8 +1,8 @@
 from ..generators.behavior_tree_generator import BehaviorTreeGenerator
 from .primitive_action_manager import PrimitiveActionManager
-from ras_bt_framework.behaviors.keywords import TargetPoseMap, rotate, gripper, single_joint_state
-from ras_bt_framework.generators.keywords_module_generator import KeywordModuleGenerator
-from ras_bt_framework.behaviors.modules import BehaviorModuleSequence
+from ..config.action_mappings import action_mapping
+# from ..behaviors.modules import BehaviorModuleSequence
+from ..behavior_template.module import BehaviorModuleSequence
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
@@ -25,8 +25,6 @@ class BaTMan(Node):
         alfred (PrimitiveActionManager): Manager for handling primitive actions.
         manager (BehaviorTreeGenerator): Generator for behavior trees.
         _action_client (ActionClient): Client for executing behavior tree actions.
-        target_pose_map (TargetPoseMap): Map of registered poses and their configurations.
-        keyword_module_gen (KeywordModuleGenerator): Generator for keyword-based modules.
         main_module (BehaviorModuleSequence): Main sequence of behavior modules.
         tick_cli (Client): Client for ticking the behavior tree.
         loop_rate (Rate): Rate for controlling the execution loop.
@@ -46,24 +44,6 @@ class BaTMan(Node):
 
         self.manager = BehaviorTreeGenerator(self.alfred)
         self._action_client = ActionClient(self, BTInterface, "bt_executor")
-        self.target_pose_map = TargetPoseMap()
-        self.keyword_module_gen = KeywordModuleGenerator()
-        self.keyword_module_gen.register({
-            "move2pose": self.target_pose_map.move2pose_module,
-            "Move": self.target_pose_map.move2pose_module,
-            "Pick": self.target_pose_map.pick_module,
-            "Place": self.target_pose_map.place_module,
-            "PlaceObject": self.target_pose_map.place_object_module,
-            "PickObject": self.target_pose_map.pick_object_module,
-            "PickFront": self.target_pose_map.pick_front_module,
-            "PickRight": self.target_pose_map.pick_right_module,
-            "PickLeft": self.target_pose_map.pick_left_module,
-            "PickRear": self.target_pose_map.pick_rear_module,
-            "rotate": rotate,
-            "gripper": gripper,
-            "move2pose_sequence": self.target_pose_map.move2pose_sequence_module,
-            "single_joint_state": single_joint_state,
-        })
         self.main_module = BehaviorModuleSequence()
         self.tick_cli = self.create_client(PrimitiveExec, '/bt_tick')
         self.loop_rate = self.create_rate(10)
@@ -79,9 +59,20 @@ class BaTMan(Node):
             keywords (list): List of keywords representing actions.
             pose_targets (dict): Dictionary mapping pose names to their configurations.
         """
-        for _k, _v in pose_targets.items():
-            self.target_pose_map.register_pose(_k, _v)
-        self.main_module = self.keyword_module_gen.generate("MainModule", keywords)
+        # Register poses with the action mapping
+        for pose_name, pose in pose_targets.items():
+            action_mapping.register_pose(pose_name, pose)
+        
+        # Create the main module sequence
+        self.main_module = BehaviorModuleSequence()
+        
+        # Process each keyword to create the corresponding action
+        for keyword in keywords:
+            if keyword in action_mapping._mappings:
+                action = action_mapping.get_action(keyword)
+                self.main_module.add_child(action)
+            else:
+                self.logger.log_warn(f"Unknown keyword: {keyword}")
     
     def send_goal(self, path: str):
         """
@@ -107,7 +98,6 @@ class BaTMan(Node):
         if not goal_handle.accepted:
             self.logger.log_info('Goal rejected :(')
             return
-        # self.logger.log_info('Goal accepted :)')
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
         self.session_started = True
@@ -120,7 +110,6 @@ class BaTMan(Node):
             future (rclpy.Future): Future object containing the execution result.
         """
         result: BTInterface.Result = future.result()
-        # self.logger.log_info('Result: {0}'.format(result.status))
     
     def feedback_callback(self, feedback_msg):
         """

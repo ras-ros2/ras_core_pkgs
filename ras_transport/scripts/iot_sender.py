@@ -24,6 +24,7 @@ import os
 import zipfile
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_logging.ras_logger import RasLogger
+from rclpy.executors import MultiThreadedExecutor
 
 # Set APP_TYPE
 APP_TYPE = os.environ.get("APP_TYPE", "server")  # fallback default
@@ -158,25 +159,43 @@ class LinkHandler(Node):
         return zip_file_path
 
     
-
-
-    
-
 def main(args=None):
     rclpy.init(args=args)
-    node = LinkHandler()
+    link_handler = LinkHandler()
+    # Create a multithreaded executor with more threads for better performance
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(link_handler)
     try:
-        while rclpy.ok():
-            rclpy.spin_once(node, timeout_sec=0.1)
-            node.remote_bt_client.loop()
-
+        # Set higher thread priority for this process if possible
+        try:
+            import os
+            os.nice(-10)  # Try to increase process priority (requires root)
+        except (ImportError, PermissionError, OSError):
+            link_handler.logger.log_warn("Could not set process priority")
+        # Process callbacks with the executor
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
-        # Cleanup and disconnect
-        node.destroy_node()
-        node.logger.log_info("Disconnected from AWS IoT")
+        # Clean up
+        link_handler.destroy_node()
         rclpy.shutdown()
+
+# def main(args=None):
+#     rclpy.init(args=args)
+#     node = LinkHandler()
+#     try:
+#         while rclpy.ok():
+#             rclpy.spin_once(node, timeout_sec=0.1)
+#             node.remote_bt_client.loop()
+
+#     except KeyboardInterrupt:
+#         pass
+#     finally:
+#         # Cleanup and disconnect
+#         node.destroy_node()
+#         node.logger.log_info("Disconnected from AWS IoT")
+#         rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

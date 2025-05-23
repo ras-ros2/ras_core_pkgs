@@ -36,7 +36,7 @@ from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_srvs.srv import SetBool
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
-
+from ras_common.globals import RAS_CONFIGS_PATH
 
 
 class TrajectoryRecordsService(Node):
@@ -45,11 +45,27 @@ class TrajectoryRecordsService(Node):
         self.get_logger().info("Node Initialized")
         self.my_callback_group = ReentrantCallbackGroup()
         self.trajectory_paths = []
+        self.current_experiment_id = None
+           
         self.create_subscription(JointTrajectory, "trajectory_topic", self.save_trajectory, 10)
         self.create_service(SetPath, '/load_path', self.load_path, callback_group=self.my_callback_group)
         self.create_service(PlayPath, '/play_trajectory', self.play_trajectory, callback_group=self.my_callback_group)
         self.create_service(SetBool, '/reset_counter', self.counter_reset_callback, callback_group=self.my_callback_group)
         self.counter = 0
+
+    def _read_experiment_id(self) -> str:
+        """Read experiment ID from current_experiment.txt"""
+        try:
+            with open(os.path.join(RAS_CONFIGS_PATH, "current_experiment.txt"), 'r') as f:
+                return f.read().strip()
+        except Exception as e:
+            self.get_logger().error(f"Failed to read experiment ID from file: {e}")
+            return None
+
+    def experiment_callback(self, msg):
+        """Callback to handle experiment ID updates"""
+        self.current_experiment_id = msg.exepriment_id
+        self.get_logger().info(f"Current experiment ID: {self.current_experiment_id}")
     
     def counter_reset_callback(self, req, resp):
         self.counter = 0
@@ -80,6 +96,7 @@ class TrajectoryRecordsService(Node):
                     }
                 } for point in msg.points]
             }
+        self.current_experiment_id = self._read_experiment_id()
         self.counter += 1  # Increment the counter
         unique_id = str(self.counter)
         print(f"Unique ID: {unique_id}")
@@ -87,6 +104,10 @@ class TrajectoryRecordsService(Node):
         if pkg_path is None:
             raise RuntimeError(f"Invalid package path")
         with open(f"{str(pkg_path)}/xml/trajectory/{unique_id}.txt", 'w') as file:
+            file.write(f"{trajectory_data}")
+        self.get_logger().info(f"unique_id_1: {unique_id}")
+        with open(f"{str(pkg_path)}/cache/{self.current_experiment_id}/trajectory/{unique_id}.txt", 'w') as file:
+            self.get_logger().info(f"unique_id_2: {unique_id}")
             file.write(f"{trajectory_data}")
 
     def load_trajectory(self, uuid: str) -> JointTrajectory:

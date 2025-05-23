@@ -7,6 +7,8 @@ import signal
 import threading
 import subprocess
 import psutil
+import hashlib
+import shutil
 from ras_bt_framework.behavior_utility.yaml_parser import read_yaml_to_pose_dict
 from ras_bt_framework.behavior_utility.update_bt import update_xml, update_bt
 import xml.etree.ElementTree as ET
@@ -21,7 +23,6 @@ from ..generators.behavior_tree_generator import BehaviorTreeGenerator
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
 from ras_common.globals import RAS_CONFIGS_PATH
 import time
-# from ..behaviors.modules import BehaviorModuleSequence
 from ..behavior_template.module import BehaviorModuleSequence
 import threading
 from std_msgs.msg import Bool
@@ -49,12 +50,23 @@ class ExperimentService(Node):
     # File to persist experiment state
     STATE_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_state.json")
 
+    # File to store experiment hashes
+    HASH_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_hashes.json")
+
+    # Directory for caching behavior trees and trajectories
+    pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
+    CACHE_DIR = os.path.join(pkg_path, "cache")
+
+    
+
     def __init__(self):
         """
         Initialize the ExperimentService node.
         
         This sets up the necessary services and clients for experiment management.
         """
+        # Create cache directory if it doesn't exist
+        os.makedirs(self.CACHE_DIR, exist_ok=True)
         super().__init__("experiment_service")
         self.logger = RasLogger()
         self.my_callback_group = ReentrantCallbackGroup()
@@ -74,6 +86,7 @@ class ExperimentService(Node):
         self.current_step_index = 0
         self.total_steps = 0
         self.sim_complete = False
+        self.experiment_changed = False
         
         # Threading lock for experiment execution
         self.exp_execution_active = False
@@ -104,7 +117,177 @@ class ExperimentService(Node):
             self.logger.log_info(f"Experiment state saved: {state}")
         except Exception as e:
             self.logger.log_error(f"Failed to save experiment state: {e}")
+            
+    def get_experiment_cache_dir(self, exp_id):
+        """Get the cache directory for an experiment."""
+        exp_cache_dir = os.path.join(self.CACHE_DIR, exp_id, "trajectory")
+        os.makedirs(exp_cache_dir, exist_ok=True)
+        return exp_cache_dir
+        
+    def get_trajectory_cache_dir(self, exp_id):
+        """Get the trajectory cache directory for an experiment."""
+        traj_cache_dir = os.path.join(self.get_experiment_cache_dir(exp_id), "trajectory")
+        os.makedirs(traj_cache_dir, exist_ok=True)
+        return traj_cache_dir
+        
+    def cache_behavior_tree(self, exp_id, step_number, source_path):
+        """Cache a behavior tree for a specific experiment step."""
+        exp_cache_dir = self.get_experiment_cache_dir(exp_id)
+        target_file = os.path.join(exp_cache_dir, f"real_step{step_number}.xml")
+        
+        try:
+            shutil.copy(source_path, target_file)
+            self.logger.log_info(f"Cached behavior tree for experiment {exp_id}, step {step_number}")
+            return target_file
+        except Exception as e:
+            self.logger.log_error(f"Error caching behavior tree: {e}")
+            return None
+            
+    def cache_trajectories(self, exp_id, source_dir):
+        """Cache all trajectory files from a source directory."""
+        traj_cache_dir = self.get_trajectory_cache_dir(exp_id)
+        
+        try:
+            # Create trajectory directory if it doesn't exist
+            os.makedirs(traj_cache_dir, exist_ok=True)
+            
+        except Exception as e:
+            self.logger.log_error(f"Error caching trajectories: {e}")
+            return 0
+            
+    def get_cached_behavior_tree(self, exp_id, step_number):
+        """Get a cached behavior tree for a specific experiment step."""
+        exp_cache_dir = self.get_experiment_cache_dir(exp_id)
+        target_file = os.path.join(exp_cache_dir, f"real_step{step_number}.xml")
+        
+        if os.path.exists(target_file):
+            self.logger.log_info(f"Found cached behavior tree for experiment {exp_id}, step {step_number}")
+            return target_file
+        else:
+            self.logger.log_info(f"No cached behavior tree found for experiment {exp_id}, step {step_number}")
+            return None
+            
+    def experiment_is_cached(self, exp_id):
+        """Check if an experiment has any cached files."""
+        exp_cache_dir = self.get_experiment_cache_dir(exp_id)
+        
+        # Check if the experiment directory exists and has any files
+        if os.path.exists(exp_cache_dir) and os.listdir(exp_cache_dir):
+            return True
+        else:
+            return False
+            
+    def clear_experiment_cache(self, exp_id):
+        """Clear the cache for a specific experiment."""
+        exp_cache_dir = self.get_experiment_cache_dir(exp_id)
+        
+        try:
+            if os.path.exists(exp_cache_dir):
+                shutil.rmtree(exp_cache_dir)
+                os.makedirs(exp_cache_dir, exist_ok=True)
+                self.logger.log_info(f"Cleared cache for experiment {exp_id}")
+                return True
+            else:
+                self.logger.log_info(f"No cache found for experiment {exp_id}")
+                return True
+        except Exception as e:
+            self.logger.log_error(f"Error clearing experiment cache: {e}")
+            return False
 
+    def calculate_file_hash(self, file_path):
+        """
+        Calculate the SHA-256 hash of a file.
+        
+        Args:
+            file_path (str): Path to the file to hash
+            
+        Returns:
+            str: Hexadecimal digest of the file hash
+        """
+        if not os.path.exists(file_path):
+            self.logger.log_error(f"File not found for hashing: {file_path}")
+            return None
+            
+        try:
+            with open(file_path, 'rb') as f:
+                file_hash = hashlib.sha256(f.read()).hexdigest()
+                self.logger.log_info(f"Calculated hash for {os.path.basename(file_path)}: {file_hash[:8]}...")
+                return file_hash
+        except Exception as e:
+            self.logger.log_error(f"Error calculating file hash: {e}")
+            return None
+    
+    def load_experiment_hashes(self):
+        """
+        Load experiment hashes from file if it exists.
+        
+        Returns:
+            dict: Dictionary of experiment IDs and their hashes
+        """
+        if os.path.exists(self.HASH_FILE):
+            try:
+                with open(self.HASH_FILE, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                self.logger.log_error(f"Error loading experiment hashes: {e}")
+        return {}
+        
+    def save_experiment_hash(self, exp_id, file_hash):
+        """
+        Save an experiment hash to the hash file.
+        
+        Args:
+            exp_id (str): Experiment ID
+            file_hash (str): Hash of the experiment file
+        """
+        hashes = self.load_experiment_hashes()
+        hashes[exp_id] = file_hash
+        
+        try:
+            with open(self.HASH_FILE, 'w') as f:
+                json.dump(hashes, f, indent=2)
+            self.logger.log_info(f"Saved hash for experiment {exp_id}")
+        except Exception as e:
+            self.logger.log_error(f"Error saving experiment hash: {e}")
+    
+    def check_experiment_changed(self, exp_id, file_path):
+        """
+        Check if an experiment file has changed by comparing its hash.
+        
+        Args:
+            exp_id (str): Experiment ID
+            file_path (str): Path to the experiment file
+            
+        Returns:
+            tuple: (bool, str) - (has_changed, current_hash)
+                - has_changed: True if the file has changed, False if unchanged or first time loading
+                - current_hash: The current hash of the file
+                - is_first_time: True if this is the first time loading this experiment
+        """
+        # Calculate current hash
+        current_hash = self.calculate_file_hash(file_path)
+        if not current_hash:
+            return True, None, False
+            
+        # Load saved hashes
+        hashes = self.load_experiment_hashes()
+        
+        # Check if experiment has a saved hash
+        if exp_id not in hashes:
+            self.logger.log_info(f"No previous hash found for experiment {exp_id} - first time loading")
+            return False, current_hash, True  # Not changed (first time), with hash and is_first_time=True
+            
+        # Compare hashes
+        previous_hash = hashes[exp_id]
+        has_changed = previous_hash != current_hash
+        
+        if has_changed:
+            self.logger.log_info(f"Experiment {exp_id} has changed (previous hash: {previous_hash[:8]}..., current: {current_hash[:8]}...)")
+        else:
+            self.logger.log_info(f"Experiment {exp_id} is unchanged (hash: {current_hash[:8]}...)")
+            
+        return has_changed, current_hash, False  # has_changed value, hash, and is_first_time=False
+    
     def load_experiment_state(self):
         if not os.path.exists(self.STATE_FILE):
             return None
@@ -228,6 +411,20 @@ class ExperimentService(Node):
         sim_path = Path(pkg_path) / "xml" / "sim.xml"
         real_path = Path(pkg_path) / "xml" / "real.xml"
         
+        # Check if we can use cached behavior tree
+        cached_bt_path = self.get_cached_behavior_tree(self.current_experiment_id, self.current_step_index + 1)
+        use_cached = False
+        
+        if cached_bt_path and not self.experiment_changed:
+            self.logger.log_info(f"Using cached behavior tree for step {self.current_step_index + 1}")
+            # Copy cached behavior tree to real.xml
+            try:
+                shutil.copy(cached_bt_path, real_path)
+                use_cached = True
+            except Exception as e:
+                self.logger.log_error(f"Error copying cached behavior tree: {e}")
+                use_cached = False
+        
         # Get current step
         current_step = [self.target_sequence[self.current_step_index]]
         step_name = f"Step{self.current_step_index + 1}"
@@ -237,70 +434,89 @@ class ExperimentService(Node):
         # Reset counter for this step
         counter_reset = SetBool.Request()
         counter_reset.data = True
-        self.counter_reset_client.call_async(counter_reset)
+        # self.counter_reset_client.call_async(counter_reset)
         
-        # Generate module for single step
-        step_module = BehaviorModuleSequence()
-        for step in current_step:
-            # If step is a dict like {'PlaceObject': 'above1'}
-            if isinstance(step, dict):
-                for keyword, params in step.items():
-                    if keyword in action_mapping._mappings:
-                        # If params is a dict, pass as kwargs; else as a single argument
-                        if isinstance(params, dict):
-                            action = action_mapping.get_action(keyword)(**params)
+        if not use_cached:
+            # Generate module for single step
+            step_module = BehaviorModuleSequence()
+            for step in current_step:
+                # If step is a dict like {'PlaceObject': 'above1'}
+                if isinstance(step, dict):
+                    for keyword, params in step.items():
+                        if keyword in action_mapping._mappings:
+                            # If params is a dict, pass as kwargs; else as a single argument
+                            if isinstance(params, dict):
+                                action = action_mapping.get_action(keyword)(**params)
+                            else:
+                                action = action_mapping.get_action(keyword)(params)
+                            step_module.add_child(action)
                         else:
-                            action = action_mapping.get_action(keyword)(params)
+                            self.logger.log_warn(f"Unknown keyword: {keyword}")
+                # If step is just a string keyword
+                elif isinstance(step, str):
+                    if step in action_mapping._mappings:
+                        action = action_mapping.get_action(step)()
                         step_module.add_child(action)
                     else:
-                        self.logger.log_warn(f"Unknown keyword: {keyword}")
-            # If step is just a string keyword
-            elif isinstance(step, str):
-                if step in action_mapping._mappings:
-                    action = action_mapping.get_action(step)()
-                    step_module.add_child(action)
-                else:
-                    self.logger.log_warn(f"Unknown keyword: {step}")
-        
-        # Generate XML for simulation
-        self.logger.log_info(f"Generating simulation trajectory for step {self.current_step_index + 1}...")
-        btg = BehaviorTreeGenerator(self.batman.alfred)
-        btg.feed_root(step_module)
-        
-        try:
-            btg.generate_xml_trees(str(sim_path))
-        except Exception as e:
-            self.logger.log_error(f"Error generating trajectory for simulation: {e}", e)
-            return False
+                        self.logger.log_warn(f"Unknown keyword: {step}")
             
-        # Run simulation
-        self.logger.log_info(f"Running simulation for step {self.current_step_index + 1}...")
-        sim_status = self.batman.execute_bt(sim_path)
-        
-        if sim_status not in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
-            self.logger.log_error(f"Simulation failed for step {self.current_step_index + 1}")
-            return False
+            # Generate XML for simulation
+            self.logger.log_info(f"Generating simulation trajectory for step {self.current_step_index + 1}...")
+            btg = BehaviorTreeGenerator(self.batman.alfred)
+            btg.feed_root(step_module)
             
-        self.logger.log_info(f"Simulation successful for step {self.current_step_index + 1}")
-        
-        # Generate real robot XML, but don't execute it yet
-        self.logger.log_info(f"Generating real robot trajectory for step {self.current_step_index + 1}...")
-        real_module = update_bt(step_module)
-        btg = BehaviorTreeGenerator(self.batman.alfred)
-        btg.feed_root(real_module)
-        
-        try:
-            btg.generate_xml_trees(str(real_path))
-            self.logger.log_info(f"Real robot trajectory generated at {real_path}")
-            self.logger.log_info("Sending execution command to real robot...")
+            try:
+                btg.generate_xml_trees(str(sim_path))
+            except Exception as e:
+                self.logger.log_error(f"Error generating trajectory for simulation: {e}", e)
+                return False
+                
+            # Run simulation
+            self.logger.log_info(f"Running simulation for step {self.current_step_index + 1}...")
+            sim_status = self.batman.execute_bt(sim_path)
             
-            # Execute experiment on real robot using ROS2 action
-            self.send_execute_exp_goal()
+            if sim_status not in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
+                self.logger.log_error(f"Simulation failed for step {self.current_step_index + 1}")
+                return False
+                
+            self.logger.log_info(f"Simulation successful for step {self.current_step_index + 1}")
             
-        except Exception as e:
-            self.logger.log_error(f"Error generating trajectory for real robot: {e}", e)
-            return False
+            # Generate real robot XML, but don't execute it yet
+            self.logger.log_info(f"Generating real robot trajectory for step {self.current_step_index + 1}...")
+            real_module = update_bt(step_module)
+            btg = BehaviorTreeGenerator(self.batman.alfred)
+            btg.feed_root(real_module)
+            
+            try:
+                btg.generate_xml_trees(str(real_path))
+                self.logger.log_info(f"Real robot trajectory generated at {real_path}")
+
+                # Cache the generated behavior tree if this is the first time or experiment has changed
+                if self.experiment_changed or not self.experiment_is_cached(self.current_experiment_id):
+                    self.cache_behavior_tree(self.current_experiment_id, self.current_step_index + 1, str(real_path))
+                    
+                    # Cache trajectory files
+                    traj_dir = os.path.join(pkg_path, "xml", "trajectory")
+                    # if os.path.exists(traj_dir):
+                    #     self.cache_trajectories(self.current_experiment_id, traj_dir)
+                        
+                self.logger.log_info("Sending execution command to real robot...")
+                
+                # Execute experiment on real robot using ROS2 action
+                self.send_execute_exp_goal()
+                
+            except Exception as e:
+                self.logger.log_error(f"Error generating trajectory for real robot: {e}", e)
+                return False
         
+        # else:
+        #     # We're using cached behavior tree, check if we need to copy trajectory files
+        #     # traj_cache_dir = self.get_trajectory_cache_dir(self.current_experiment_id)
+        #     traj_dir = os.path.join(pkg_path, "xml", "trajectory")
+            
+        #     # Ensure trajectory directory exists
+        #     os.makedirs(traj_dir, exist_ok=True)
+
         self.sim_complete = True
         return True
     
@@ -534,6 +750,9 @@ class ExperimentService(Node):
         """
         
         while self.exp_execution_active and self.current_step_index < self.total_steps:
+
+            if !self.experiment_changed:
+                self.send_execute_exp_goal()
             # Simulate current step if not already simulated
             if not self.sim_complete:
                 success = self.simulate_current_step()
@@ -598,6 +817,8 @@ class ExperimentService(Node):
             self.exp_execution_active = False
             if self.current_step_index >= self.total_steps:
                 self.logger.log_info("Experiment execution completed")
+
+                self.save_experiment_hash(exp_id, current_hash)
             else:
                 self.logger.log_info("Experiment execution stopped")
 
@@ -628,6 +849,26 @@ class ExperimentService(Node):
             f.write(exp_id)
         # self.logger.log_info(f"Saved current experiment ID {exp_id} to {current_exp_path}")
         
+        # Check if experiment file has changed since last time
+        has_changed, current_hash, is_first_time = self.check_experiment_changed(exp_id, path)
+        
+        # If we have a valid hash, save it regardless of whether it changed
+        # if current_hash:
+        #     self.save_experiment_hash(exp_id, current_hash)
+            
+        # Log whether the experiment has changed
+        if is_first_time:
+            self.logger.log_info(f"Experiment {exp_id} is being loaded for the first time")
+        elif has_changed:
+            self.logger.log_info(f"Experiment {exp_id} has been modified since last run")
+        else:
+            self.logger.log_info(f"Experiment {exp_id} is unchanged from previous run")
+        
+        # Store the hash status in the response and class property
+        resp.experiment_changed = has_changed
+        self.experiment_changed = has_changed or is_first_time
+
+        # Load the experiment data
         self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
         # Register all poses
         if self.pose_dict is not None:

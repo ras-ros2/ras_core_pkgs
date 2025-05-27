@@ -56,6 +56,9 @@ class ExperimentService(Node):
         super().__init__("experiment_service")
         self.logger = RasLogger()
         self.my_callback_group = ReentrantCallbackGroup()
+        
+        # Store calibrated coordinates
+        self.calibrated_coordinates = {'x': 0, 'y': 0}
         self.create_service(LoadExp, "/execute_experiment", self.execute_experiment_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/sim_step", self.sim_step_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/next_step", self.next_step_callback, callback_group=self.my_callback_group)
@@ -89,6 +92,56 @@ class ExperimentService(Node):
 
         # Add /resume_experiment service
         self.create_service(Trigger, "/resume_experiment", self.resume_experiment_callback)
+
+
+    def parse_calibration_data(self):
+        """
+        Parse calibration data from JSON file, extract workspace center coordinates,
+        and round them as requested.
+        """
+        calibration_file = os.path.join(RAS_CONFIGS_PATH, "calibration_data.json")
+        if not os.path.exists(calibration_file):
+            self.logger.log_warning(f"Calibration data file not found: {calibration_file}")
+            return
+            
+        try:
+            with open(calibration_file, 'r') as f:
+                calibration_data = json.load(f)
+                
+            # Check if the data exists
+            if not calibration_data:
+                self.logger.log_warning("Calibration data file is empty")
+                return
+                
+            # Extract workspace center coordinates directly from the calibration data
+            if 'workspace_center_cm' in calibration_data:
+                workspace_center = calibration_data['workspace_center_cm']
+                
+                # Extract x and y coordinates
+                x_cm = workspace_center.get('x', 0)
+                y_cm = workspace_center.get('y', 0)
+                
+                # Round x and y as requested
+                # For x: if decimal part >= 0.5, round up, otherwise round down
+                x_rounded = int(x_cm) + (1 if x_cm - int(x_cm) >= 0.5 else 0)
+                
+                # For y: if decimal part >= 0.5, round up, otherwise round down
+                y_rounded = int(y_cm) + (1 if y_cm - int(y_cm) >= 0.5 else 0)
+                
+                # Store the rounded coordinates in the class attribute
+                self.calibrated_coordinates = {'x': x_rounded, 'y': y_rounded}
+                
+                # Log the original and rounded values
+                self.logger.log_info(f"Calibration workspace center: Original X={x_cm:.2f}cm, Y={y_cm:.2f}cm")
+                self.logger.log_info(f"Calibration workspace center: Rounded X={x_rounded}cm, Y={y_rounded}cm")
+                
+                # Print the rounded values with color formatting
+                print(f"\033[1;32m[CALIBRATION] Workspace center (rounded): X={x_rounded}cm, Y={y_rounded}cm\033[0m")
+            else:
+                self.logger.log_warning("No workspace center coordinates found in calibration data")
+        except Exception as e:
+            self.logger.log_error(f"Error parsing calibration data: {e}")
+
 
     def save_experiment_state(self):
         state = {
@@ -603,7 +656,15 @@ class ExperimentService(Node):
             f.write(exp_id)
         # self.logger.log_info(f"Saved current experiment ID {exp_id} to {current_exp_path}")
         
-        self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
+        # Parse calibration data from JSON file first
+        self.parse_calibration_data()
+        
+        # Pass the calibrated coordinates to the YAML parser
+        self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(
+            path, 
+            calibrated_coordinates=self.calibrated_coordinates
+        )
+        
         self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
         
         self.current_step_index = 0

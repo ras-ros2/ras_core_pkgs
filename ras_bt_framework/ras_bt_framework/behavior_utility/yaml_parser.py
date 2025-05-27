@@ -121,7 +121,19 @@ def check_radius_constraint(pose_name, pose_values):
         return False
     return True
 
-def read_yaml_to_pose_dict(path):
+def read_yaml_to_pose_dict(path, calibrated_coordinates=None):
+    """
+    Read YAML file and convert to pose dictionary and target sequence.
+    
+    Args:
+        path (str): Path to the YAML file
+        calibrated_coordinates (dict, optional): Dictionary with calibrated x, y coordinates
+            to add to the pose values if use_calibration flag is set to True in the YAML file.
+            Default is None.
+    
+    Returns:
+        tuple: (pose_dict, target_pose) - Pose dictionary and target sequence
+    """
     print(f"Reading YAML file: {path}")
 
     with open(path, 'r') as file:
@@ -130,13 +142,30 @@ def read_yaml_to_pose_dict(path):
     if 'Poses' not in data:
         raise KeyError("The key 'Poses' is missing from the YAML file.")
     
+    # Check if we should use calibration
+    use_calibration = data.get('use_calibration', False)
+    if use_calibration and calibrated_coordinates:
+        logger.log_info(f"Applying calibration offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm")
+        print(f"\033[1;36m[CALIBRATION] Applying workspace center offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm\033[0m")
+    
     pose_dict = {}
     for pose_name, pose_values in data['Poses'].items():
-        validate_pose_values(pose_values)
-        check_radius_constraint(pose_name, pose_values)
-        pose_values = convert_pose_to_meters(pose_values)
-        # validate_pose_values(pose_values)
-        pose_dict[pose_name] = PortPoseCfg(pose=PoseConfig.from_dict(pose_values))
+        # Create a copy of the pose values to avoid modifying the original
+        adjusted_pose = copy.deepcopy(pose_values)
+        
+        # Apply calibration offsets if enabled
+        if use_calibration and calibrated_coordinates:
+            # Add the calibrated x and y values to the pose coordinates
+            adjusted_pose['x'] += calibrated_coordinates['x']
+            adjusted_pose['y'] += calibrated_coordinates['y']
+            logger.log_info(f"Adjusted pose '{pose_name}': Original X={pose_values['x']}cm, Y={pose_values['y']}cm -> "  
+                           f"Adjusted X={adjusted_pose['x']}cm, Y={adjusted_pose['y']}cm")
+        
+        validate_pose_values(adjusted_pose)
+        check_radius_constraint(pose_name, adjusted_pose)
+        adjusted_pose = convert_pose_to_meters(adjusted_pose)
+        # validate_pose_values(adjusted_pose)
+        pose_dict[pose_name] = PortPoseCfg(pose=PoseConfig.from_dict(adjusted_pose))
 
     if 'targets' not in data:
         raise KeyError("The key 'targets' is missing from the YAML file.")
@@ -168,48 +197,6 @@ def read_yaml_to_pose_dict(path):
                     # Place is translated to move2pose + open gripper
                     target_pose.append({"move2pose": value})
                     target_pose.append({"gripper": False})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "PlaceObject":
-                # New unified place action that combines move + gripper control
-                if value in pose_dict:
-                    # PlaceObject is a single action (not decomposed)
-                    target_pose.append({"PlaceObject": value})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "PickObject":
-                # New unified pick action that combines move + gripper control
-                if value in pose_dict:
-                    # PickObject is a single action (not decomposed)
-                    target_pose.append({"PickObject": value})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "PickFront":
-                # New unified pick action that combines move + gripper control
-                if value in pose_dict:
-                    # PickFront is a single action (not decomposed)
-                    target_pose.append({"PickFront": value})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "PickRight":
-                # New unified pick action that combines move + gripper control
-                if value in pose_dict:
-                    # PickRight is a single action (not decomposed)
-                    target_pose.append({"PickRight": value})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "PickLeft":
-                # New unified pick action that combines move + gripper control
-                if value in pose_dict:
-                    # PickRight is a single action (not decomposed)
-                    target_pose.append({"PickLeft": value})
-                else:
-                    raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
-            elif key == "PickRear":
-                # New unified pick action that combines move + gripper control
-                if value in pose_dict:
-                    # PickRight is a single action (not decomposed)
-                    target_pose.append({"PickRear": value})
                 else:
                     raise KeyError(f"Undefined pose '{value}' in 'targets' section. Available poses: {list(pose_dict.keys())}")
             elif key == "single_joint_state":

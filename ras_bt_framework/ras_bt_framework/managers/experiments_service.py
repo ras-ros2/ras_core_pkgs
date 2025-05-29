@@ -722,34 +722,34 @@ class ExperimentService(Node):
                 exp_data = yaml.safe_load(file)
                 
             # Check if calibration is specified in the experiment file
-            use_calibration = exp_data.get('use_calibration', None)
+            calibration_file_path = exp_data.get('calibration_file_path', None)
             
             # Handle the case where 'None' is a string in YAML
-            if isinstance(use_calibration, str) and use_calibration.lower() == 'none':
-                use_calibration = None
+            if isinstance(calibration_file_path, str) and calibration_file_path.lower() == 'none':
+                calibration_file_path = None
             
-            # If use_calibration is None or False, don't apply any calibration
-            if use_calibration is None or use_calibration is False:
+            # If calibration_file_path is None or False, don't apply any calibration
+            if calibration_file_path is None or calibration_file_path is False:
                 # No calibration needed - use original coordinates without modification
                 self.logger.log_info("No calibration applied for this experiment (using original coordinates)")
                 print("\033[1;33m[INFO] No calibration applied for this experiment (using original coordinates)\033[0m")
                 # Reset calibrated coordinates to None to signal no calibration
                 self.calibrated_coordinates = None
-            # If use_calibration is a string, it's a path to a calibration file
-            elif isinstance(use_calibration, str):
-                self.logger.log_info(f"Using calibration file specified in experiment: {use_calibration}")
+            # If calibration_file_path is a string, it's a path to a calibration file
+            elif isinstance(calibration_file_path, str):
+                self.logger.log_info(f"Using calibration file specified in experiment: {calibration_file_path}")
                 # Parse calibration data from the specified file
-                calibration_success = self.parse_calibration_data(use_calibration)
+                calibration_success = self.parse_calibration_data(calibration_file_path)
                 
                 if not calibration_success:
-                    self.logger.log_error(f"Failed to load calibration file: {use_calibration}")
-                    print(f"\033[1;31m[ERROR] Failed to load calibration file specified in experiment: {use_calibration}\033[0m")
+                    self.logger.log_error(f"Failed to load calibration file: {calibration_file_path}")
+                    print(f"\033[1;31m[ERROR] Failed to load calibration file specified in experiment: {calibration_file_path}\033[0m")
                     resp.success = False
                     return resp
             else:
                 # Unknown calibration value - treat as error
-                self.logger.log_error(f"Invalid calibration value: {use_calibration}. Must be None or a relative path.")
-                print(f"\033[1;31m[ERROR] Invalid calibration value: {use_calibration}. Must be None or a relative path.\033[0m")
+                self.logger.log_error(f"Invalid calibration value: {calibration_file_path}. Must be None or a relative path.")
+                print(f"\033[1;31m[ERROR] Invalid calibration value: {calibration_file_path}. Must be None or a relative path.\033[0m")
                 resp.success = False
                 return resp
         except Exception as e:

@@ -67,7 +67,7 @@ class TrajectoryLogger(LifecycleNode):
 
         self.instruction_flag = True
         self.remote_bt_server = TransportServiceServer("remote_bt", self.custom_callback)
-        self.test_service_server = TransportServiceServer("test_service", self.test_service_callback)
+        self.remote_calibration_server = TransportServiceServer("remote_calibration", self.remote_calibration_callback)
         self.batman = BaTMan()
 
         # Connect to AWS IoT
@@ -77,15 +77,15 @@ class TrajectoryLogger(LifecycleNode):
 
     def connect_to_aws(self):
         self.remote_bt_server.connect_with_retries()
-        self.test_service_server.connect_with_retries()
+        self.remote_calibration_server.connect_with_retries()
         self.file_client.connect_with_retries()
         self.reciever_timer = self.create_timer(0.1, self.timer_callback)
 
     def timer_callback(self):
         self.remote_bt_server.loop()
-        self.test_service_server.loop()
+        self.remote_calibration_server.loop()
 
-    def test_service_callback(self, message):
+    def remote_calibration_callback(self, message):
         try:
             print("TEST SERVICE CALLBACK RECEIVED MESSAGE")
             payload = message.decode("utf-8")

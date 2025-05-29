@@ -128,7 +128,7 @@ def read_yaml_to_pose_dict(path, calibrated_coordinates=None):
     Args:
         path (str): Path to the YAML file
         calibrated_coordinates (dict, optional): Dictionary with calibrated x, y coordinates
-            to add to the pose values if use_calibration flag is set to True in the YAML file.
+            to add to the pose values if calibration_file_path flag is set to True in the YAML file.
             Default is None.
     
     Returns:
@@ -143,29 +143,29 @@ def read_yaml_to_pose_dict(path, calibrated_coordinates=None):
         raise KeyError("The key 'Poses' is missing from the YAML file.")
     
     # Check if we should use calibration
-    use_calibration = data.get('use_calibration', None)
+    calibration_file_path = data.get('calibration_file_path', None)
     
     # Handle the case where 'None' is a string in YAML
-    if isinstance(use_calibration, str) and use_calibration.lower() == 'none':
-        use_calibration = None
+    if isinstance(calibration_file_path, str) and calibration_file_path.lower() == 'none':
+        calibration_file_path = None
     
-    # If use_calibration is None or False, don't apply any calibration at all
-    if use_calibration is None or use_calibration is False:
+    # If calibration_file_path is None or False, don't apply any calibration at all
+    if calibration_file_path is None or calibration_file_path is False:
         logger.log_info("No calibration specified - using original coordinates without modification")
         print(f"\033[1;33m[INFO] No calibration specified - using original coordinates without modification\033[0m")
         # Set calibrated_coordinates to None to signal that no calibration should be applied
         calibrated_coordinates = None
-    # If use_calibration is True (legacy support) or a string path, and we have calibrated coordinates
+    # If calibration_file_path is True (legacy support) or a string path, and we have calibrated coordinates
     elif calibrated_coordinates:
-        if isinstance(use_calibration, bool) and use_calibration:
+        if isinstance(calibration_file_path, bool) and calibration_file_path:
             # Legacy support for boolean flag
             logger.log_info(f"Applying calibration offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm")
             print(f"\033[1;36m[CALIBRATION] Applying workspace center offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm\033[0m")
-        elif isinstance(use_calibration, str):
+        elif isinstance(calibration_file_path, str):
             # This means we're using a specific calibration file
-            logger.log_info(f"Using calibration file: {use_calibration}")
+            logger.log_info(f"Using calibration file: {calibration_file_path}")
             logger.log_info(f"Applying calibration offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm")
-            print(f"\033[1;36m[CALIBRATION] Using file: {use_calibration}\033[0m")
+            print(f"\033[1;36m[CALIBRATION] Using file: {calibration_file_path}\033[0m")
             print(f"\033[1;36m[CALIBRATION] Applying workspace center offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm\033[0m")
     
     pose_dict = {}

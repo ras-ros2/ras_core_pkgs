@@ -10,7 +10,7 @@ import subprocess
 from ras_common.globals import RAS_CONFIGS_PATH
 from ras_logging.ras_logger import RasLogger
 
-def save_calibration_data(calibration_data):
+def save_calibration_data(calibration_data, custom_filename=None):
     """Save calibration data to a JSON file with a unique name in the calibration_configs folder"""
     logger = RasLogger()
     try:
@@ -18,12 +18,38 @@ def save_calibration_data(calibration_data):
         calibration_dir = os.path.join(RAS_CONFIGS_PATH, "calibration_configs")
         os.makedirs(calibration_dir, exist_ok=True)
         
-        # Generate a unique filename based on timestamp
+        # Generate a unique filename based on timestamp or use custom filename if provided
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"xarm_calibration_{timestamp}.json"
-        file_path = os.path.join(calibration_dir, filename)
         
-        # No longer saving to standard location
+        if custom_filename and custom_filename.strip():
+            # Use the custom filename provided by the user
+            # Make sure it has the .json extension
+            if not custom_filename.lower().endswith('.json'):
+                custom_filename += '.json'
+            filename = custom_filename
+            
+            # Check if the file already exists
+            file_path = os.path.join(calibration_dir, filename)
+            while os.path.exists(file_path):
+                print(f"Error: A file named '{filename}' already exists.")
+                print("Please enter a different filename (or press Enter for default timestamp-based name):")
+                new_filename = input().strip()
+                
+                if not new_filename:
+                    # User chose to use default timestamp-based name
+                    filename = f"xarm_calibration_{timestamp}.json"
+                    break
+                else:
+                    # Use the new filename provided by the user
+                    if not new_filename.lower().endswith('.json'):
+                        new_filename += '.json'
+                    filename = new_filename
+                    file_path = os.path.join(calibration_dir, filename)
+        else:
+            # Use the default filename with timestamp
+            filename = f"xarm_calibration_{timestamp}.json"
+            
+        file_path = os.path.join(calibration_dir, filename)
         
         # Create the data structure
         data = {
@@ -66,9 +92,10 @@ def poll_calibration_data(client):
             if response_data.get("success", False) and "calibration_data" in response_data:
                 calibration_data = response_data["calibration_data"]
                 
-                # Clear the current line and print the data
-                sys.stdout.write("\r" + " " * 80)  # Clear the line
-                sys.stdout.write(f"\rCurrent calibration: X={calibration_data['x']:.2f} cm, Y={calibration_data['y']:.2f} cm, Z={calibration_data['z']:.2f} cm")
+                # Clear the current line and print the data on the same line
+                # Use carriage return (\r) to return to the beginning of the line without a newline
+                # Use end='' to prevent print from adding a newline
+                print(f"\rCurrent calibration: X={calibration_data['x']:.2f} cm, Y={calibration_data['y']:.2f} cm, Z={calibration_data['z']:.2f} cm", end='    ')
                 sys.stdout.flush()
         except Exception as e:
             # Don't print errors, just continue
@@ -83,7 +110,7 @@ def main():
     logger.log_info("--------------------------------")
     
     # Connect to the service
-    transport_service_client = TransportServiceClient("test_service")
+    transport_service_client = TransportServiceClient("remote_calibration")
     transport_service_client.connect_with_retries()
     transport_service_client.loop()
     
@@ -138,10 +165,18 @@ def main():
         return
     
     # Wait for user to press Enter to stop the calibration
+    print("\nPress Enter to save the current calibration values...")
     input()
     
     # Stop the polling thread
     polling_active = False
+    
+    # Clear the line
+    print("\r" + " " * 80)
+    
+    # Ask the user for a custom filename
+    print("Enter a custom filename for the calibration data (or press Enter for default):")
+    custom_filename = input().strip()
     
     # Terminate the rqt_image_view process if it exists
     if rqt_process is not None:
@@ -193,7 +228,7 @@ def main():
                 logger.log_info(f"  Timestamp: {calibration_data['timestamp']}")
                 
                 # Save the calibration data
-                save_calibration_data(calibration_data)
+                save_calibration_data(calibration_data, custom_filename)
             except Exception as e:
                 logger.log_error(f"Error reading calibration data from file: {e}")
         else:
@@ -234,7 +269,7 @@ def main():
                 logger.log_info(f"  Timestamp: {calibration_data['timestamp']}")
                 
                 # Save the calibration data
-                save_calibration_data(calibration_data)
+                save_calibration_data(calibration_data, custom_filename)
             else:
                 logger.log_error("No calibration data received. Make sure ArUco markers are visible.")
         else:

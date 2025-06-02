@@ -36,8 +36,7 @@ from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_srvs.srv import SetBool
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
-from ras_common.globals import RAS_CONFIGS_PATH
-
+from ras_common.globals import RAS_CONFIGS_PATH, RAS_CACHE_PATH
 
 class TrajectoryRecordsService(Node):
     def __init__(self):
@@ -46,6 +45,7 @@ class TrajectoryRecordsService(Node):
         self.my_callback_group = ReentrantCallbackGroup()
         self.trajectory_paths = []
         self.current_experiment_id = None
+        self.current_step = 1  # Track current step
            
         self.create_subscription(JointTrajectory, "trajectory_topic", self.save_trajectory, 10)
         self.create_service(SetPath, '/load_path', self.load_path, callback_group=self.my_callback_group)
@@ -62,13 +62,31 @@ class TrajectoryRecordsService(Node):
             self.get_logger().error(f"Failed to read experiment ID from file: {e}")
             return None
 
+    def _read_experiment_hash(self, exp_id: str) -> str:
+        """Read experiment hash from experiment_file_hashes.json"""
+        try:
+            hash_file = os.path.join(RAS_CONFIGS_PATH, "experiment_file_hashes.json")
+            if os.path.exists(hash_file) and os.path.getsize(hash_file) > 0:
+                with open(hash_file, 'r') as f:
+                    hashes = json.load(f)
+                    if exp_id in hashes:
+                        return hashes[exp_id]
+            self.get_logger().warn(f"No hash found for experiment {exp_id}")
+            return "no_hash"
+        except Exception as e:
+            self.get_logger().error(f"Failed to read experiment hash from file: {e}")
+            return "no_hash"
+
     def experiment_callback(self, msg):
         """Callback to handle experiment ID updates"""
         self.current_experiment_id = msg.exepriment_id
         self.get_logger().info(f"Current experiment ID: {self.current_experiment_id}")
     
     def counter_reset_callback(self, req, resp):
+        """Reset counter and increment step number when counter is reset"""
         self.counter = 0
+        self.current_step += 1  # Increment step number when counter is reset
+        self.get_logger().info(f"Counter reset. Moving to step {self.current_step}")
         resp.success = True
         return resp
         
@@ -97,27 +115,45 @@ class TrajectoryRecordsService(Node):
                 } for point in msg.points]
             }
         self.current_experiment_id = self._read_experiment_id()
+        if not self.current_experiment_id:
+            self.get_logger().error("No experiment ID found, cannot save trajectory")
+            return
+
+        # Get the hash for current experiment
+        hash_id = self._read_experiment_hash(self.current_experiment_id)
+        self.get_logger().info(f"Using hash {hash_id} for experiment {self.current_experiment_id}")
+        
         self.counter += 1  # Increment the counter
-        unique_id = str(self.counter)
-        print(f"Unique ID: {unique_id}")
+        
+        # Use counter as the file number (1.txt, 2.txt, 3.txt)
+        file_number = str(self.counter)
+        self.get_logger().info(f"Generating trajectory file: {file_number}.txt")
+        
         pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
+        configs_path = os.path.join(RAS_CACHE_PATH)
         if pkg_path is None:
             raise RuntimeError(f"Invalid package path")
-        with open(f"{str(pkg_path)}/xml/trajectory/{unique_id}.txt", 'w') as file:
+            
+        # Save to package trajectory directory
+        trajectory_dir = os.path.join(str(pkg_path), "xml", "trajectory")
+        # os.makedirs(trajectory_dir, exist_ok=True)  # Ensure directory exists
+        with open(os.path.join(trajectory_dir, f"{file_number}.txt"), 'w') as file:
             file.write(f"{trajectory_data}")
-        self.get_logger().info(f"unique_id_1: {unique_id}")
-        with open(f"{str(pkg_path)}/cache/{self.current_experiment_id}/trajectory/{unique_id}.txt", 'w') as file:
-            self.get_logger().info(f"unique_id_2: {unique_id}")
+        self.get_logger().info(f"Saved trajectory to package directory: {file_number}.txt")
+        
+        # Save to experiment cache directory with hash
+        cache_dir = os.path.join(str(configs_path), "server", self.current_experiment_id, hash_id, "trajectory")
+        # os.makedirs(cache_dir, exist_ok=True)  # Ensure directory exists
+        with open(os.path.join(cache_dir, f"{file_number}.txt"), 'w') as file:
             file.write(f"{trajectory_data}")
+        self.get_logger().info(f"Saved trajectory to cache directory: {file_number}.txt")
 
     def load_trajectory(self, uuid: str) -> JointTrajectory:
         path = self.trajectory_paths[len(self.trajectory_paths)-1]
-        final_path = path +"/trajectory" +f"/{uuid}.txt"
+        final_path = path +f"/{uuid}.txt"
         with open(final_path, 'r') as file:
             for line in file:
                 traj_string = line.strip()
-
-        
         
         json_string = traj_string.replace("'", '"')
 

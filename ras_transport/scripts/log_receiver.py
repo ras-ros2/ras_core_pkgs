@@ -242,6 +242,9 @@ class TrajectoryLogger(LifecycleNode):
                     self.logger.log_info(f"Successfully downloaded image: {extract_path}/{image_filename}")
                 else:
                     self.logger.log_warn(f"Failed to download image: {image_filename}")
+
+                #TODO - implement a action server to send the status of successfullly downloaded image whether true or false to client when requested for status by iot_sender(which will have action client there.)
+                
             else:
                 self.logger.log_warn("No image filename found in this message.")
 

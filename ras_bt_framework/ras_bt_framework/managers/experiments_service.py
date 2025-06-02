@@ -21,7 +21,7 @@ from pathlib import Path
 from ras_interfaces.msg import BTNodeStatus
 from ..generators.behavior_tree_generator import BehaviorTreeGenerator
 from ras_common.package.utils import get_cmake_python_pkg_source_dir
-from ras_common.globals import RAS_CONFIGS_PATH
+from ras_common.globals import RAS_CONFIGS_PATH, RAS_CACHE_PATH
 import time
 from ..behavior_template.module import BehaviorModuleSequence
 import threading
@@ -34,6 +34,12 @@ from ras_logging.ras_logger import RasLogger
 from ras_interfaces.srv import ReportRobotState
 from std_srvs.srv import Trigger
 from ras_bt_framework.config import action_mapping
+
+# Define a new service type for checking cache status
+# Assuming a srv file named CheckCacheStatus.srv exists in ras_interfaces/srv
+# Request: string experiment_id
+# Response: bool cache_present
+from ras_interfaces.srv import CheckCacheStatus
 
 class ExperimentService(Node):
     """
@@ -51,13 +57,13 @@ class ExperimentService(Node):
     STATE_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_state.json")
 
     # File to store experiment hashes
-    HASH_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_hashes.json")
+    HASH_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_file_hashes.json")
+
+    # # File to store experiment trajectory folder hashes
+    # TRAJ_HASH_FOLDER = os.path.join(RAS_CONFIGS_PATH, "experiment_traj_hashes.json")
 
     # Directory for caching behavior trees and trajectories
-    pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
-    CACHE_DIR = os.path.join(pkg_path, "cache")
-
-    
+    CACHE_DIR = os.path.join(RAS_CACHE_PATH, "server")
 
     def __init__(self):
         """
@@ -99,11 +105,57 @@ class ExperimentService(Node):
 
         self.create_service(ReportRobotState, "/report_robot_state", self.report_robot_state_callback, callback_group=self.my_callback_group)
         
+        # Create cache status service client
+        # Assuming CheckCacheStatus.srv exists in ras_interfaces/srv
+        self.cache_status_client = self.create_client(CheckCacheStatus, 'cache_status', callback_group=self.my_callback_group)
+
         # Attempt to recover experiment state on startup
         self.recover_experiment_state()
 
         # Add /resume_experiment service
         self.create_service(Trigger, "/resume_experiment", self.resume_experiment_callback)
+
+    # def load_traj_hash(self, exp_id):
+    #     if os.path.exists(self.TRAJ_HASH_FOLDER):
+    #         if os.path.getsize(self.TRAJ_HASH_FOLDER) == 0:
+    #             return None
+    #         try:
+    #             with open(self.TRAJ_HASH_FOLDER, 'r') as f:
+    #                 hashes = json.load(f)
+    #             return hashes.get(exp_id)
+    #         except Exception as e:
+    #             self.logger.log_error(f"Error loading traj hashes: {e}")
+    #     return None
+    
+    # def calculate_traj_hash(self, traj_hash_path):
+    #     """Compute SHA256 hash over all files in folder (sorted order, including file content and relative path)."""
+    #     hash_sha256 = hashlib.sha256()
+    #     for root, dirs, files in os.walk(folder_path):
+    #         files.sort()
+    #         for fname in files:
+    #             fpath = os.path.join(root, fname)
+    #             rel_path = os.path.relpath(fpath, folder_path)
+    #             hash_sha256.update(rel_path.encode())
+    #             with open(fpath, 'rb') as f:
+    #                 while True:
+    #                     chunk = f.read(4096)
+    #                     if not chunk:
+    #                         break
+    #                     hash_sha256.update(chunk)
+    #     return hash_sha256.hexdigest()
+
+    # def save_traj_hash(self, exp_id, traj_hash):
+    #     try:
+    #         hashes = {}
+    #         if os.path.exists(self.TRAJ_HASH_FOLDER) and os.path.getsize(self.TRAJ_HASH_FOLDER) > 0:
+    #             with open(self.TRAJ_HASH_FOLDER, 'r') as f:
+    #                 hashes = json.load(f)
+    #         hashes[exp_id] = traj_hash
+    #         with open(self.TRAJ_HASH_FOLDER, 'w') as f:
+    #             json.dump(hashes, f, indent=2)
+    #         self.logger.log_info(f"Saved folder hash for experiment {exp_id}")
+    #     except Exception as e:
+    #         self.logger.log_error(f"Error saving folder hash: {e}")
 
     def save_experiment_state(self):
         state = {
@@ -120,14 +172,30 @@ class ExperimentService(Node):
             
     def get_experiment_cache_dir(self, exp_id):
         """Get the cache directory for an experiment."""
-        exp_cache_dir = os.path.join(self.CACHE_DIR, exp_id, "trajectory")
+        # Get the current hash for this experiment
+        hashes = self.load_experiment_hashes()
+        current_hash = hashes.get(exp_id)
+        
+        if current_hash is None:
+            # If no hash exists, calculate it from the experiment file
+            exp_path = os.path.join(RAS_CONFIGS_PATH, "experiments", f"{exp_id}.yaml")
+            current_hash = self.calculate_file_hash(exp_path)
+            if current_hash:
+                # Save the newly calculated hash
+                self.save_experiment_hash(exp_id, current_hash)
+                self.logger.log_info(f"Calculated and saved new hash for experiment {exp_id}: {current_hash}")
+            else:
+                self.logger.log_error(f"Could not calculate hash for experiment {exp_id}")
+                return None
+        
+        # Use the hash in the path
+        exp_cache_dir = os.path.join(self.CACHE_DIR, exp_id, current_hash, "trajectory")
         os.makedirs(exp_cache_dir, exist_ok=True)
         return exp_cache_dir
         
     def get_trajectory_cache_dir(self, exp_id):
         """Get the trajectory cache directory for an experiment."""
-        traj_cache_dir = os.path.join(self.get_experiment_cache_dir(exp_id), "trajectory")
-        os.makedirs(traj_cache_dir, exist_ok=True)
+        traj_cache_dir = self.get_experiment_cache_dir(exp_id)
         return traj_cache_dir
         
     def cache_behavior_tree(self, exp_id, step_number, source_path):
@@ -143,6 +211,14 @@ class ExperimentService(Node):
             self.logger.log_error(f"Error caching behavior tree: {e}")
             return None
             
+    def _files_are_identical(self, file1, file2):
+        """Check if two files are identical by comparing their contents."""
+        try:
+            with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
+                return f1.read() == f2.read()
+        except Exception:
+            return False
+            
     def cache_trajectories(self, exp_id, source_dir):
         """Cache all trajectory files from a source directory."""
         traj_cache_dir = self.get_trajectory_cache_dir(exp_id)
@@ -150,10 +226,10 @@ class ExperimentService(Node):
         try:
             # Create trajectory directory if it doesn't exist
             os.makedirs(traj_cache_dir, exist_ok=True)
-            
+            return True
         except Exception as e:
             self.logger.log_error(f"Error caching trajectories: {e}")
-            return 0
+            return False
             
     def get_cached_behavior_tree(self, exp_id, step_number):
         """Get a cached behavior tree for a specific experiment step."""
@@ -234,25 +310,27 @@ class ExperimentService(Node):
         
     def save_experiment_hash(self, exp_id, file_hash):
         """
-        Save an experiment hash to the hash file.
+        Save an experiment hash to the hash file for record keeping.
         
         Args:
             exp_id (str): Experiment ID
             file_hash (str): Hash of the experiment file
         """
-        hashes = self.load_experiment_hashes()
-        hashes[exp_id] = file_hash
-        
         try:
+            hashes = {}
+            if os.path.exists(self.HASH_FILE) and os.path.getsize(self.HASH_FILE) > 0:
+                with open(self.HASH_FILE, 'r') as f:
+                    hashes = json.load(f)
+            hashes[exp_id] = file_hash
             with open(self.HASH_FILE, 'w') as f:
                 json.dump(hashes, f, indent=2)
-            self.logger.log_info(f"Saved hash for experiment {exp_id}")
+            self.logger.log_info(f"Saved hash for experiment {exp_id} for record keeping")
         except Exception as e:
             self.logger.log_error(f"Error saving experiment hash: {e}")
     
     def check_experiment_changed(self, exp_id, file_path):
         """
-        Check if an experiment file has changed by comparing its hash.
+        Check if an experiment file has changed by comparing its hash with the cache directory structure.
         
         Args:
             exp_id (str): Experiment ID
@@ -266,25 +344,41 @@ class ExperimentService(Node):
         """
         # Calculate current hash
         current_hash = self.calculate_file_hash(file_path)
+        
         if not current_hash:
             return True, None, False
             
-        # Load saved hashes
-        hashes = self.load_experiment_hashes()
-        
-        # Check if experiment has a saved hash
-        if exp_id not in hashes:
-            self.logger.log_info(f"No previous hash found for experiment {exp_id} - first time loading")
+        # Check if experiment directory exists
+        exp_dir = os.path.join(self.CACHE_DIR, exp_id)
+        if not os.path.exists(exp_dir):
+            self.logger.log_info(f"No previous cache found for experiment {exp_id} - first time loading")
+            # Save hash for record keeping
+            self.save_experiment_hash(exp_id, current_hash)
             return False, current_hash, True  # Not changed (first time), with hash and is_first_time=True
             
-        # Compare hashes
-        previous_hash = hashes[exp_id]
-        has_changed = previous_hash != current_hash
+        # Get all subdirectories (each representing a hash)
+        try:
+            hash_dirs = [d for d in os.listdir(exp_dir) if os.path.isdir(os.path.join(exp_dir, d))]
+        except Exception as e:
+            self.logger.log_error(f"Error reading cache directory: {e}")
+            return True, current_hash, False
+            
+        # If no hash directories exist, this is first time
+        if not hash_dirs:
+            self.logger.log_info(f"No previous hash found for experiment {exp_id} - first time loading")
+            # Save hash for record keeping
+            self.save_experiment_hash(exp_id, current_hash)
+            return False, current_hash, True
+            
+        # Check if current hash matches any existing hash directory
+        has_changed = current_hash not in hash_dirs
         
         if has_changed:
-            self.logger.log_info(f"Experiment {exp_id} has changed (previous hash: {previous_hash[:8]}..., current: {current_hash[:8]}...)")
+            self.logger.log_info(f"Experiment {exp_id} has changed (previous hash not found in cache)")
+            # Save new hash for record keeping
+            self.save_experiment_hash(exp_id, current_hash)
         else:
-            self.logger.log_info(f"Experiment {exp_id} is unchanged (hash: {current_hash[:8]}...)")
+            self.logger.log_info(f"Experiment {exp_id} is unchanged (hash found in cache: {current_hash})")
             
         return has_changed, current_hash, False  # has_changed value, hash, and is_first_time=False
     
@@ -432,8 +526,8 @@ class ExperimentService(Node):
         self.logger.log_info(f"Processing step {self.current_step_index + 1}/{self.total_steps}: {current_step}")
         
         # Reset counter for this step
-        counter_reset = SetBool.Request()
-        counter_reset.data = True
+        # counter_reset = SetBool.Request()
+        # counter_reset.data = True
         # self.counter_reset_client.call_async(counter_reset)
         
         if not use_cached:
@@ -523,13 +617,16 @@ class ExperimentService(Node):
     def send_execute_exp_goal(self):
         """
         Send a goal to the /execute_exp action server to run the experiment on the real robot.
+        Includes the current experiment hash in the goal message.
         """
         # Wait for action server
         if not self.execute_exp_client.wait_for_server(timeout_sec=1.0):
             self.logger.log_info("Action server not available, using command line approach instead")
             # Fall back to using command line
             try:
-                cmd = "ros2 action send_goal /execute_exp ras_interfaces/action/ExecuteExp {}"
+                # Include hash in the command line message
+                hash_msg = f"{self.current_experiment_hash}" if hasattr(self, 'current_experiment_hash') else "no_hash"
+                cmd = f"ros2 action send_goal /execute_exp ras_interfaces/action/ExecuteExp '{{hash_id: \"{hash_msg}\"}}'"
                 self.logger.log_info(f"Executing command: {cmd}")
                 # Execute the command in a non-blocking way
                 subprocess.Popen(cmd, shell=True)
@@ -540,11 +637,16 @@ class ExperimentService(Node):
         
         # Create and send goal
         goal_msg = ExecuteExp.Goal()
+        # Add hash to the goal message
+        if hasattr(self, 'current_experiment_hash'):
+            goal_msg.hash_id = self.current_experiment_hash
+        else:
+            goal_msg.hash_id = "no_hash"
         
         # Send the goal asynchronously
         send_goal_future = self.execute_exp_client.send_goal_async(goal_msg)
         send_goal_future.add_done_callback(self.goal_response_callback)
-        self.logger.log_info("Goal sent to execute experiment on real robot")
+        self.logger.log_info(f"Goal sent to execute experiment on real robot with hash: {goal_msg.hash_id}")
     
     def goal_response_callback(self, future):
         """
@@ -751,16 +853,43 @@ class ExperimentService(Node):
         
         while self.exp_execution_active and self.current_step_index < self.total_steps:
 
-            if !self.experiment_changed:
-                self.send_execute_exp_goal()
             # Simulate current step if not already simulated
             if not self.sim_complete:
-                success = self.simulate_current_step()
-                if not success:
-                    self.logger.log_error("Step simulation failed, stopping experiment execution")
-                    break
+                # Check if we can use cached behavior tree
+                cached_bt_path = self.get_cached_behavior_tree(self.current_experiment_id, self.current_step_index + 1)
+                robot_cached = False
+
+                if cached_bt_path and not self.experiment_changed:
+                    self.logger.log_info(f"Using cached behavior tree for step {self.current_step_index + 1}")
+                    # Get package path for XML files
+                    pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")
+                    if pkg_path is None:
+                        self.logger.log_error("ras_bt_framework package path not found")
+                        break
+                        
+                    real_path = Path(pkg_path) / "xml" / "real.xml"
+                    
+                    # Copy cached behavior tree to real.xml
+                    try:
+                        shutil.copy(cached_bt_path, real_path)
+                        robot_cached = True
+                        self.logger.log_info("Successfully copied cached behavior tree")
+                        
+                        # Send execution command to real robot
+                        self.logger.log_info("Sending execution command to real robot...")
+                        self.send_execute_exp_goal()
+                        
+                        self.sim_complete = True
+                    except Exception as e:
+                        self.logger.log_error(f"Error copying cached behavior tree: {e}")
+                        robot_cached = False
                 
-                # Note: We don't need to explicitly execute on real robot here as it's now done in simulate_current_step()
+                if not robot_cached:
+                    # If we can't use cached behavior tree, proceed with normal simulation
+                    success = self.simulate_current_step()
+                    if not success:
+                        self.logger.log_error("Step simulation failed, stopping experiment execution")
+                        break
             
             # Wait for real robot execution to complete
             self.logger.log_info(f"Waiting for real robot to complete step {self.current_step_index + 1}...")
@@ -807,18 +936,26 @@ class ExperimentService(Node):
                 self.logger.log_info("All steps completed successfully")
             else:
                 self.logger.log_info(f"Advanced to step {self.current_step_index + 1}/{self.total_steps}")
-                # Automatically simulate next step immediately
-                success = self.simulate_current_step()
-                if not success:
-                    self.logger.log_error("Next step simulation failed, stopping experiment execution")
-                    break
+                # The main loop will handle the next step in the next iteration
         
         with self.exp_execution_lock:
             self.exp_execution_active = False
             if self.current_step_index >= self.total_steps:
                 self.logger.log_info("Experiment execution completed")
-
-                self.save_experiment_hash(exp_id, current_hash)
+                # Save experiment hash with experiment_id and current_hash, but only if not already present
+                exp_id = getattr(self, "current_experiment_id", None)
+                if exp_id is not None:
+                    hashes = self.load_experiment_hashes()
+                    if exp_id in hashes:
+                        self.logger.log_info(f"Experiment hash for {exp_id} already exists, not recalculating.")
+                    else:
+                        exp_path = os.path.join(RAS_CONFIGS_PATH, "experiments", f"{exp_id}.yaml")
+                        current_hash = self.calculate_file_hash(exp_path)
+                        if current_hash:
+                            self.save_experiment_hash(exp_id, current_hash)
+                            self.logger.log_info(f"Saved experiment hash for {exp_id} after completion.")
+                        else:
+                            self.logger.log_warn(f"Could not calculate hash for experiment {exp_id} after completion.")
             else:
                 self.logger.log_info("Experiment execution stopped")
 
@@ -851,11 +988,9 @@ class ExperimentService(Node):
         
         # Check if experiment file has changed since last time
         has_changed, current_hash, is_first_time = self.check_experiment_changed(exp_id, path)
-        
-        # If we have a valid hash, save it regardless of whether it changed
-        # if current_hash:
-        #     self.save_experiment_hash(exp_id, current_hash)
-            
+        self.current_experiment_hash = current_hash
+        self.current_experiment_id = exp_id
+
         # Log whether the experiment has changed
         if is_first_time:
             self.logger.log_info(f"Experiment {exp_id} is being loaded for the first time")
@@ -874,7 +1009,6 @@ class ExperimentService(Node):
         if self.pose_dict is not None:
             for pose_name, pose in self.pose_dict.items():
                 action_mapping.register_pose(pose_name, pose)
-        # self.batman.generate_module_from_keywords(self.target_sequence, self.pose_dict)
         
         self.current_step_index = 0
         self.total_steps = len(self.target_sequence)
@@ -884,28 +1018,75 @@ class ExperimentService(Node):
 
         self.save_experiment_state()
 
-        self.stop_exp_execution()  
+        # Stop any ongoing experiment execution before starting a new one
+        self.stop_exp_execution()
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
 
-        self.logger.log_info("Starting the experiment execution...")
-        
-        if self.target_sequence is None or len(self.target_sequence) == 0:
-            self.logger.log_error("No experiment loaded or empty sequence")
-            resp.success = False
+        # --- Cache Check Logic ---
+        self.logger.log_info(f"Checking cache status for experiment '{exp_id}' on robot...")
+        cache_status_req = CheckCacheStatus.Request()
+        cache_status_req.experiment_id = exp_id
+
+        # Wait for the cache_status service to be available
+        if not self.cache_status_client.wait_for_service(timeout_sec=5.0):
+            self.logger.log_warn("Cache status service not available on robot. Proceeding without cache check.")
+            # If service is not available, proceed with normal execution flow
+            self.logger.log_info("Starting the experiment execution (no cache check)...")
+            with self.exp_execution_lock:
+                 if not self.exp_execution_active:
+                     self.exp_execution_active = True
+                     self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                     self.exp_execution_thread.daemon = True
+                     self.exp_execution_thread.start()
+            resp.success = True # Indicate success for loading and starting flow
             return resp
-        
-        with self.exp_execution_lock:
-            if self.exp_execution_active:
-                self.logger.log_info("Experiment execution already running")
-                resp.success = True
-                return resp
-                
-            # Start the experiment execution flow in a separate thread
-            self.exp_execution_active = True
-            self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
-            self.exp_execution_thread.daemon = True
-            self.exp_execution_thread.start()
             
-        resp.success = True
-        return resp
+        # Call the cache_status service
+        future = self.cache_status_client.call_async(cache_status_req)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=10.0) # Wait for the response
+
+        if future.result() is not None:
+            cache_present = future.result().cache_present
+            self.logger.log_info(f"Cache status response for '{exp_id}': {cache_present}")
+
+            if cache_present:
+                self.logger.log_info(f"Cache found on robot for experiment '{exp_id}'. Robot will execute locally.")
+                
+                # Prepare response message indicating cache was found
+                resp.success = True 
+                resp.message = f"Cache found on robot for experiment '{exp_id}'. Robot will execute locally."
+                # Do NOT return here, continue to start the execution thread
+
+            else:
+                self.logger.log_info(f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution.")
+                # Prepare response message indicating cache was not found
+                resp.success = True # Indicate success for loading and starting flow
+                resp.message = f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution."
+
+            # In both cases (cache found or not found), start the experiment execution flow
+            self.logger.log_info("Starting the experiment execution thread...")
+            with self.exp_execution_lock:
+                if not self.exp_execution_active:
+                    self.exp_execution_active = True
+                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                    self.exp_execution_thread.daemon = True
+                    self.exp_execution_thread.start()
+                else:
+                    self.logger.log_info("Experiment execution already running, not starting new thread.")
+            
+            # Return the prepared response after starting the thread
+            return resp
+
+        else:
+            self.logger.log_error("Failed to call cache_status service. Proceeding without cache check.")
+            # If service call fails, fall back to normal execution flow
+            self.logger.log_info("Starting the experiment execution (cache check failed)....") # Corrected log message
+            with self.exp_execution_lock:
+                 if not self.exp_execution_active:
+                     self.exp_execution_active = True
+                     self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                     self.exp_execution_thread.daemon = True
+                     self.exp_execution_thread.start()
+            resp.success = True # Indicate success for loading and starting flow
+            return resp

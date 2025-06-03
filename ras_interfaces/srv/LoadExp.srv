@@ -8,3 +8,4 @@ string lab_file_path
 string exp_file_path
 bool success
 string err_msg
+bool experiment_changed

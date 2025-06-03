@@ -602,7 +602,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
       // 1. Move to the target pose
       RCLCPP_INFO(this->get_logger(), "Moving to pick pose: x=%f, y=%f, z=%f", 
-                  request->target_pose.position.x -= 0.1,
+                  request->target_pose.position.x -= 0.12,
                   request->target_pose.position.y,
                   request->target_pose.position.z);
 
@@ -638,7 +638,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
       // Step 3: Move to the next pose with z -= 0.1
       geometry_msgs::msg::Pose lowered_pose = request->target_pose;
-      lowered_pose.position.x += 0.03;
+      lowered_pose.position.x += 0.045;
 
       RCLCPP_INFO(this->get_logger(), "Moving to lowered pose: x=%f, y=%f, z=%f", 
                   lowered_pose.position.x,

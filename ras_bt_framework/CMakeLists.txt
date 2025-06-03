@@ -33,7 +33,6 @@ ament_target_dependencies(examples behaviortree_cpp)
 add_executable(executor  src/executor.cpp src/BTExecutor.cpp )
 ament_target_dependencies(executor rclcpp behaviortree_cpp ras_interfaces geometry_msgs rclcpp_action std_srvs)
 
-
 install(TARGETS
   examples
   executor
@@ -42,8 +41,10 @@ install(TARGETS
 install(DIRECTORY scripts/
  DESTINATION lib/${PROJECT_NAME}/)
 
-ament_python_install_package(${PROJECT_NAME})
-
+# Install Python package with all its subdirectories
+ament_python_install_package(${PROJECT_NAME}
+  SCRIPTS_DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

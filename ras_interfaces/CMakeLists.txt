@@ -53,6 +53,7 @@ set(srv_files
   "srv/PickRight.srv"
   "srv/PickLeft.srv"
   "srv/PickRear.srv"
+  "srv/CheckCacheStatus.srv"
 )
 set(action_files
   "action/BTInterface.action"

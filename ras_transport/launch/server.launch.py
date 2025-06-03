@@ -14,6 +14,12 @@ def generate_launch_description():
     nodes = [
         Node(
             package='ras_transport',
+            executable='aruco_experiment_manager.py',
+            name='aruco_experiment_manager',
+            output='screen'
+        ),
+        Node(
+            package='ras_transport',
             executable='log_receiver.py',
             name='log_receiver',
             output='screen'

@@ -23,6 +23,8 @@ Email: info@opensciencestack.org
 
 import os
 import subprocess
+import datetime
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -41,15 +43,41 @@ from ras_common.globals import RAS_APP_PATH
 from ras_transport.interfaces.TransportWrapper import TransportFileServer, TransportServiceServer
 import json
 import yaml
-import time
 from ras_bt_framework.managers.BaTMan import BaTMan
 from ras_interfaces.msg import BTNodeStatus
 from pathlib import Path
 from ras_transport.interfaces.TransportWrapper import TransportFileClient
 from ras_logging.ras_logger import RasLogger
+from ras_common.globals import RAS_CONFIGS_PATH, RAS_CACHE_PATH
 
 class TrajectoryLogger(LifecycleNode):
+    """
+    A ROS2 node that handles receiving and executing experiment data on the robot.
+
+    This node is responsible for:
+    1. Receiving experiment data from the server
+    2. Managing experiment execution on the robot
+    3. Tracking executed steps for each experiment
+    4. Providing cache status information
+    5. Logging execution status
+
+    The node maintains state about:
+    - Currently executing experiment
+    - Steps that have been executed
+    - Cache status of experiments
+    """
+
     def __init__(self):
+        """
+        Initialize the TrajectoryLogger node.
+
+        Sets up:
+        1. MQTT clients for communication
+        2. Service servers for cache status and path loading
+        3. File client for data transfer
+        4. AWS IoT connection
+        5. Step tracking system
+        """
         super().__init__('trajectory_logger')
         self.logger = RasLogger()
         my_callback_group = ReentrantCallbackGroup()
@@ -61,16 +89,43 @@ class TrajectoryLogger(LifecycleNode):
         self.status_client = self.create_client(StatusLog, '/traj_status')
 
         self.instruction_msg = []
-
         self.instruction_flag = True
         self.remote_bt_server = TransportServiceServer("remote_bt", self.custom_callback)
-
         self.batman = BaTMan()
+
+        # Track executed steps for each experiment and hash combination
+        self.executed_steps = {}  # Format: {(exp_id, hash_id): set(executed_step_numbers)}
 
         # Connect to AWS IoT
         self.connect_to_aws()
 
         self.payload = ''
+
+    def get_executed_steps(self, exp_id, hash_id):
+        """
+        Gets the set of steps that have been executed for a specific experiment and hash.
+
+        Args:
+            exp_id (str): The experiment ID
+            hash_id (str): The hash ID of the experiment
+
+        Returns:
+            set: Set of step numbers that have been executed
+        """
+        return self.executed_steps.get((exp_id, hash_id), set())
+
+    def mark_step_executed(self, exp_id, hash_id, step_number):
+        """
+        Marks a step as executed for a specific experiment and hash.
+
+        Args:
+            exp_id (str): The experiment ID
+            hash_id (str): The hash ID of the experiment
+            step_number (int): The step number to mark as executed
+        """
+        if (exp_id, hash_id) not in self.executed_steps:
+            self.executed_steps[(exp_id, hash_id)] = set()
+        self.executed_steps[(exp_id, hash_id)].add(step_number)
 
     def connect_to_aws(self):
         self.remote_bt_server.connect_with_retries()
@@ -81,69 +136,252 @@ class TrajectoryLogger(LifecycleNode):
         self.remote_bt_server.loop()
 
     def custom_callback(self, message):
-        self.payload =  message.decode("utf-8")
-        self.logger.log_info("Received Message")
+        """
+        Callback for handling incoming experiment data and cache status requests.
 
-        # Extract image filename from payload (if present)
+        This function:
+        1. Handles cache status requests
+        2. Extracts experiment name and hash from the message
+        3. Downloads and extracts the experiment data
+        4. Executes the behavior trees in sequence
+        5. Tracks executed steps
+        6. Logs execution status
+
+        Args:
+            message (bytes): The incoming message containing either:
+                - Cache status request (JSON with experiment_id and hash_id)
+                - Zip filename for experiment execution
+
+        Returns:
+            str: JSON string containing the execution status or cache status
+        """
         try:
-            payload_json = json.loads(self.payload)
-            image_filename = payload_json.get("image_filename")
-            # Image download logic removed; handled in log_receiver instead
+            # Try to parse as JSON first (cache status request)
+            request_data = json.loads(message.decode("utf-8"))
+            if isinstance(request_data, dict) and "experiment_id" in request_data and "hash_id" in request_data:
+                # This is a cache status request
+                experiment_id = request_data["experiment_id"]
+                hash_id = request_data["hash_id"]
+                self.logger.log_info(f"Received cache status request for experiment: {experiment_id} with hash: {hash_id}")
+
+                configs_path = RAS_CACHE_PATH
+                if not configs_path:
+                    self.logger.log_error("Unable to find the configs path (RAS_CACHE_PATH)")
+                    return json.dumps({"cache_present": False, "status": False, "message": "Config path not found"})
+
+                # Construct the potential extraction path within the robot cache
+                cache_exp_dir = os.path.join(configs_path, "robot", experiment_id, hash_id)
+
+                # Check if the cache for this experiment and hash exists and contains trajectory files
+                traj_dir_path = os.path.join(cache_exp_dir, "trajectory")
+                cache_present = os.path.exists(traj_dir_path) and os.path.isdir(traj_dir_path) and any(f.endswith('.xml') or f.endswith('.txt') for f in os.listdir(traj_dir_path))
+
+                self.logger.log_info(f"Cache status for experiment '{experiment_id}' with hash '{hash_id}': {cache_present}")
+
+                # Call the load_path service regardless of whether the cache was just downloaded
+                # or was already present. This informs TrajectoryRecordsService about the path.
+                self.logger.log_info(f"Calling load_path service with path: {traj_dir_path}")
+                path_req = SetPath.Request()
+                path_req.path = traj_dir_path
+                self.path_client.call_async(path_req)
+
+                if cache_present:
+                    self.logger.log_info(f"Cache found for experiment '{experiment_id}' with hash '{hash_id}'. Starting execution...")
+                    
+                    # Start timing the experiment execution
+                    start_time = time.time()
+
+                    # Find and execute all real_stepX.xml files in order
+                    bt_files = sorted([f for f in os.listdir(traj_dir_path) if f.startswith("real_step") and f.endswith(".xml")],
+                                    key=lambda x: int(x[len("real_step"): -len(".xml")])) # Sort by step number
+
+                    overall_success = True
+                    if not bt_files:
+                        self.logger.log_warn(f"No real_stepX.xml files found in {traj_dir_path}")
+                        overall_success = False
+                        self.call_status_log_service('FAILED')
+                    else:
+                        self.logger.log_info(f"Found behavior tree steps: {bt_files}")
+                        
+                        # Get executed steps and execute only the new step
+                        executed_steps = self.get_executed_steps(experiment_id, hash_id)
+                        self.logger.log_info(f"Already executed steps for {experiment_id}: {executed_steps}")
+                        
+                        for bt_file in bt_files:
+                            step_number = int(bt_file[len("real_step"): -len(".xml")])
+                            
+                            # Skip if step already executed
+                            if step_number in executed_steps:
+                                self.logger.log_info(f"Skipping already executed step: {bt_file}")
+                                continue
+                            
+                            bt_path = os.path.join(traj_dir_path, bt_file)
+                            step_success = self.execute_behavior_tree(bt_path, step_number, experiment_id, hash_id)
+                            if not step_success:
+                                overall_success = False
+                                break # Stop executing further steps if one fails
+
+                    # Calculate and log execution time
+                    end_time = time.time()
+                    execution_time = end_time - start_time
+                    self.logger.log_info(f"Experiment execution completed in {execution_time:.2f} seconds")
+
+                    # Return cache status and execution status
+                    return json.dumps({"cache_present": cache_present, "status": overall_success, "execution_time": execution_time})
+
+                else:
+                     # If cache not present, just return the cache status
+                     return json.dumps({"cache_present": cache_present})
+
+        except json.JSONDecodeError:
+            # Not a JSON message, treat as zip filename for new experiment download/execution
+            pass
+
+        # The message now contains the zip filename with hash
+        self.payload = message.decode("utf-8")
+        zip_filename = self.payload.strip()
+        self.logger.log_info(f"Received message: {zip_filename}")
+
+        # Start timing the experiment execution for non-cached case
+        start_time = time.time()
+
+        # Extract experiment name and hash from filename (e.g., "xml_experiment_name_hash.zip")
+        try:
+            if zip_filename.startswith("xml_") and zip_filename.endswith(".zip"):
+                # Remove "xml_" prefix and ".zip" suffix
+                name_hash = zip_filename[len("xml_"):-len(".zip")]
+                # Split by last underscore to separate name and hash
+                parts = name_hash.rsplit("_", 1)
+                if len(parts) == 2:
+                    experiment_name, hash_id = parts
+                    self.logger.log_info(f"Extracted experiment name: {experiment_name}, hash: {hash_id}")
+                else:
+                    self.logger.log_error(f"Invalid zip filename format (missing hash): {zip_filename}")
+                    status = False
+                    payload = json.dumps({"status": status, "cache_found": False, "message": "Invalid filename format"})
+                    return payload
+            else:
+                self.logger.log_error(f"Invalid zip filename format received: {zip_filename}")
+                status = False
+                payload = json.dumps({"status": status, "cache_found": False, "message": "Invalid filename format"})
+                return payload
         except Exception as e:
-            self.logger.log_warn(f"Could not parse payload for image filename: {e}")
-
-        pkg_path = get_cmake_python_pkg_source_dir("ras_transport")
-        if not pkg_path:
-            self.logger.log_error("Unable to find the package path")
+            self.logger.log_error(f"Failed to extract experiment name and hash from {zip_filename}: {e}")
             status = False
-            payload = json.dumps({"status": status}) 
-            return  payload
-        
-        extract_path = os.path.join(str(pkg_path), "real_bot_zip")
-        Path(extract_path).mkdir(parents=True, exist_ok=True)
+            payload = json.dumps({"status": status, "cache_found": False, "message": f"Failed to extract experiment name and hash: {e}"})
+            return payload
 
-        self.logger.log_info("Downloading the file using http...")
-        result = self.file_client.download("xml_directory.zip", f"{extract_path}/xml_directory.zip")
-        # result = subprocess.run(
-        #     ["cp", f"{TransportFileServer.serve_path}/xml_directory.zip", f"{extract_path}"],
-        #     check=True,
-        #     capture_output=True,
-        #     text=True,
-        # )
+        configs_path = RAS_CACHE_PATH
+        if not configs_path:
+            self.logger.log_error("Unable to find the configs path (RAS_CACHE_PATH)")
+            status = False
+            payload = json.dumps({"status": status, "cache_found": False, "message": "Config path not found"})
+            return payload
+
+        # Construct the extraction path within the robot cache using hash
+        cache_exp_dir = os.path.join(configs_path, "robot", experiment_name, hash_id)
+        traj_dir_path = os.path.join(cache_exp_dir, "trajectory")
+
+        # Check if this is a new experiment (cache not present)
+        is_new_experiment = not os.path.exists(cache_exp_dir)
+        if is_new_experiment:
+            self.logger.log_info(f"New experiment detected: {experiment_name} with hash {hash_id}")
+        else:
+            self.logger.log_info(f"Existing experiment: {experiment_name} with hash {hash_id}")
+
+        # Create directory and download new zip
+        Path(traj_dir_path).mkdir(parents=True, exist_ok=True)
+        local_zip_path = os.path.join(traj_dir_path, zip_filename)
+
+        self.logger.log_info(f"Downloading the file {zip_filename} to {local_zip_path} using http...")
+        result = self.file_client.download(zip_filename, local_zip_path)
 
         if result:
             self.logger.log_info("Download completed")
         else:
             self.logger.log_error("Download failed")
-            payload = json.dumps({"status": False})
+            payload = json.dumps({"status": False, "cache_found": False, "message": "Download failed"})
             return payload
 
-        result2 = subprocess.run(
-            ["unzip", "-o", f"{extract_path}/xml_directory.zip", "-d", f"{extract_path}"],
-            check=True,
-            capture_output=True,
-            text=True
-        )
+        self.logger.log_info(f"Unzipping {local_zip_path} to {traj_dir_path}...")
+        try:
+            result2 = subprocess.run(
+                ["unzip", "-o", local_zip_path, "-d", traj_dir_path],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            self.logger.log_info("Unzip completed")
+        except subprocess.CalledProcessError as e:
+             self.logger.log_error(f"Unzip failed: {e.stderr}")
+             payload = json.dumps({"status": False, "cache_found": False, "message": f"Unzip failed: {e.stderr}"})
+             return payload
 
-        path_zip = SetPath.Request()
-        path_zip.path = extract_path
-        self.path_client.call_async(path_zip)
+        # Restore the call to the load_path service
+        self.logger.log_info(f"Calling load_path service with path: {traj_dir_path}")
+        path_req = SetPath.Request()
+        path_req.path = traj_dir_path
+        self.path_client.call_async(path_req)
 
-        bt_path = path_zip.path + "/real.xml"
-        status = self.batman.execute_bt(bt_path)
-        if status in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
-            self.logger.log_info("Behavior Tree Execution Successful")
-            status = True
-            
-            # Call the status logging service
-            self.call_status_log_service('SUCCESS')
+        # Find and execute all real_stepX.xml files in order
+        bt_files = sorted([f for f in os.listdir(traj_dir_path) if f.startswith("real_step") and f.endswith(".xml")],
+                          key=lambda x: int(x[len("real_step"): -len(".xml")])) # Sort by step number
+
+        overall_success = True
+        if not bt_files:
+            self.logger.log_warn(f"No real_stepX.xml files found in {traj_dir_path}")
+            overall_success = False
+            self.call_status_log_service('FAILED')
         else:
-            self.logger.log_info("Behavior Tree Execution Failed")
-            status = False
-        payload = json.dumps({"status": status}) 
+            self.logger.log_info(f"Found behavior tree steps: {bt_files}")
+            
+            if is_new_experiment:
+                # For new experiment, execute the first step
+                bt_file = bt_files[0]
+                step_number = int(bt_file[len("real_step"): -len(".xml")])
+                bt_path = os.path.join(traj_dir_path, bt_file)
+                self.logger.log_info(f"Executing first step of new experiment: {bt_file}")
+                overall_success = self.execute_behavior_tree(bt_path, step_number, experiment_name, hash_id)
+            else:
+                # For existing experiment, get executed steps and execute only the new step
+                executed_steps = self.get_executed_steps(experiment_name, hash_id)
+                self.logger.log_info(f"Already executed steps for {experiment_name}: {executed_steps}")
+                
+                for bt_file in bt_files:
+                    step_number = int(bt_file[len("real_step"): -len(".xml")])
+                    
+                    # Skip if step already executed
+                    if step_number in executed_steps:
+                        self.logger.log_info(f"Skipping already executed step: {bt_file}")
+                        continue
+                    
+                    bt_path = os.path.join(traj_dir_path, bt_file)
+                    step_success = self.execute_behavior_tree(bt_path, step_number, experiment_name, hash_id)
+                    if not step_success:
+                        overall_success = False
+                        break # Stop executing further steps if one fails
+
+        # Calculate and log execution time
+        end_time = time.time()
+        execution_time = end_time - start_time
+        self.logger.log_info(f"Experiment execution completed in {execution_time:.2f} seconds")
+
+        # The response payload should indicate the execution status
+        payload = json.dumps({"status": overall_success, "execution_time": execution_time})
         return payload
         
     def call_status_log_service(self, status_value):
+        """
+        Calls the status logging service to update execution status.
+
+        This function:
+        1. Waits for the status logging service to be available
+        2. Creates and sends a status update request
+        3. Handles the response asynchronously
+
+        Args:
+            status_value (str): The status to log ('SUCCESS' or 'FAILED')
+        """
         # Wait for service to be available
         if not self.status_client.wait_for_service(timeout_sec=1.0):
             self.logger.log_warn('Status logging service not available')
@@ -167,6 +405,39 @@ class TrajectoryLogger(LifecycleNode):
                 self.logger.log_warn('Status log service call failed')
         except Exception as e:
             self.logger.log_error(f'Service call failed: {e}', e)
+
+    def execute_behavior_tree(self, bt_path, step_number, experiment_name, hash_id):
+        """
+        Executes a behavior tree and logs its status.
+
+        This function:
+        1. Executes the behavior tree
+        2. Logs the execution status
+        3. Marks the step as executed if successful
+        4. Updates the status log service
+
+        Args:
+            bt_path (str): Path to the behavior tree XML file
+            step_number (int): The step number being executed
+            experiment_name (str): Name of the experiment
+            hash_id (str): Hash ID of the experiment
+
+        Returns:
+            bool: True if execution was successful, False otherwise
+        """
+        self.logger.log_info(f"Executing behavior tree step: {bt_path}")
+        status = self.batman.execute_bt(bt_path)
+        
+        if status not in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
+            self.logger.log_error(f"Behavior Tree Execution Failed with status {status}")
+            self.call_status_log_service('FAILED')
+            return False
+        else:
+            # Mark step as executed
+            self.mark_step_executed(experiment_name, hash_id, step_number)
+            self.logger.log_info(f"Marked step {step_number} as executed")
+            self.call_status_log_service('SUCCESS')
+            return True
 
 def main(args=None):
     rclpy.init(args=args)

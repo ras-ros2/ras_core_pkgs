@@ -44,17 +44,34 @@ mapping = {
 
 @dataclass
 class SequenceId:
+    _instance = None
     sequence: int = 1
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(SequenceId, cls).__new__(cls)
+            cls._instance.sequence = 1
+        return cls._instance
 
     def inc(self):
         self.sequence += 1
+        return self.sequence
     
     def get(self):
         return self.sequence
     
+    def reset(self):
+        self.sequence = 1
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
 def update_bt(behavior: BehaviorModule, sequence=None):
     if sequence is None:
-        sequence = SequenceId()
+        sequence = SequenceId.get_instance()
     if isinstance(behavior, BehaviorModuleSequence) or isinstance(behavior, BehaviorModuleCollection):
         new_children = list()
         for child in behavior.iterate():

@@ -34,7 +34,7 @@ from ras_logging.ras_logger import RasLogger
 from ras_interfaces.srv import ReportRobotState
 from std_srvs.srv import Trigger
 from ras_bt_framework.config import action_mapping
-from ras_interfaces.srv import CheckCacheStatus
+from ras_transport.interfaces.TransportWrapper import TransportServiceClient
 
 class ExperimentService(Node):
     """
@@ -97,8 +97,8 @@ class ExperimentService(Node):
 
         self.create_service(ReportRobotState, "/report_robot_state", self.report_robot_state_callback, callback_group=self.my_callback_group)
         
-        # Create cache status service client
-        self.cache_status_client = self.create_client(CheckCacheStatus, '/cache_status', callback_group=self.my_callback_group)
+        # Create transport service client for cache status
+        self.transport_cache_client = TransportServiceClient("remote_bt")
 
         # Attempt to recover experiment state on startup
         self.recover_experiment_state()
@@ -838,7 +838,7 @@ class ExperimentService(Node):
         - Transport service management
         - State persistence for recovery
         """
-        
+
         while self.exp_execution_active and self.current_step_index < self.total_steps:
 
             # Simulate current step if not already simulated
@@ -984,7 +984,6 @@ class ExperimentService(Node):
         current_exp_path = os.path.join(RAS_CONFIGS_PATH, "current_experiment.txt")
         with open(current_exp_path, 'w') as f:
             f.write(exp_id)
-        # self.logger.log_info(f"Saved current experiment ID {exp_id} to {current_exp_path}")
         
         # Check if experiment file has changed since last time
         has_changed, current_hash, is_first_time = self.check_experiment_changed(exp_id, path)
@@ -1023,65 +1022,61 @@ class ExperimentService(Node):
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
 
-        # Check cache status on robot
+        # Check cache status on robot using transport service
         self.logger.log_info(f"Checking cache status for experiment '{exp_id}' with hash '{current_hash}' on robot...")
-        cache_status_req = CheckCacheStatus.Request()
-        cache_status_req.experiment_id = exp_id
-        cache_status_req.hash_id = current_hash
+        
+        # Connect to transport service if not already connected
+        if not hasattr(self, 'transport_connected') or not self.transport_connected:
+            self.transport_cache_client.connect_with_retries()
+            self.transport_connected = True
 
-        # Wait for the cache_status service to be available
-        if not self.cache_status_client.wait_for_service(timeout_sec=5.0):
-            self.logger.log_warn("Cache status service not available on robot. Proceeding without cache check.")
-            # If service is not available, proceed with normal execution flow
-            self.logger.log_info("Starting the experiment execution (no cache check)...")
-            with self.exp_execution_lock:
-                if not self.exp_execution_active:
-                    self.exp_execution_active = True
-                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
-                    self.exp_execution_thread.daemon = True
-                    self.exp_execution_thread.start()
-            resp.success = True
-            return resp
-            
-        # Call the cache_status service
-        future = self.cache_status_client.call_async(cache_status_req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
+        # Create cache status request message
+        cache_status_msg = json.dumps({
+            "experiment_id": exp_id,
+            "hash_id": current_hash
+        })
 
-        if future.result() is not None:
-            cache_present = future.result().cache_present
-            self.logger.log_info(f"Cache status response for '{exp_id}' with hash '{current_hash}': {cache_present}")
+        # Send request and wait for response
+        try:
+            response = self.transport_cache_client.call(cache_status_msg)
+            if response:
+                response_data = json.loads(response)
+                cache_present = response_data.get("cache_present", False)
+                self.logger.log_info(f"Cache status response for '{exp_id}' with hash '{current_hash}': {cache_present}")
 
-            if cache_present:
-                self.logger.log_info(f"Cache found on robot for experiment '{exp_id}' with hash '{current_hash}'. Robot will execute locally.")
-                resp.success = True
-                resp.message = f"Cache found on robot for experiment '{exp_id}'. Robot will execute locally."
-            else:
-                self.logger.log_info(f"Cache not found on robot for experiment '{exp_id}' with hash '{current_hash}'. Proceeding with normal execution.")
-                resp.success = True
-                resp.message = f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution."
-
-            # In both cases (cache found or not found), start the experiment execution flow
-            self.logger.log_info("Starting the experiment execution thread...")
-            with self.exp_execution_lock:
-                if not self.exp_execution_active:
-                    self.exp_execution_active = True
-                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
-                    self.exp_execution_thread.daemon = True
-                    self.exp_execution_thread.start()
+                if cache_present:
+                    self.logger.log_info(f"Cache found on robot for experiment '{exp_id}' with hash '{current_hash}'. Robot will execute locally.")
+                    resp.success = True
+                    
+                    # Since cache is present, iot_receiver will handle execution and timing.
+                    # We just need to return the success response here.
+                    execution_time = response_data.get("execution_time")
+                    if execution_time is not None:
+                        self.logger.log_info(f"Experiment execution time (cached): {execution_time:.2f} seconds")
+                    else:
+                        self.logger.log_warn("Execution time not received from iot_receiver.")
                 else:
-                    self.logger.log_info("Experiment execution already running, not starting new thread.")
-            
-            return resp
-
-        else:
-            self.logger.log_error("Failed to call cache_status service. Proceeding without cache check.")
-            # If service call fails, fall back to normal execution flow
-            self.logger.log_info("Starting the experiment execution (cache check failed)...")
-            with self.exp_execution_lock:
-                if not self.exp_execution_active:
-                    self.exp_execution_active = True
-                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
-                    self.exp_execution_thread.daemon = True
-                    self.exp_execution_thread.start()
+                    self.logger.log_info(f"Cache not found on robot for experiment '{exp_id}' with hash '{current_hash}'. Proceeding with normal execution.")
+                    resp.success = True
+                    resp.err_msg = f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution."
+                    
+                    # Start the experiment execution thread without waiting
+                    self.logger.log_info("Starting the experiment execution thread...")
+                    with self.exp_execution_lock:
+                        if not self.exp_execution_active:
+                            self.exp_execution_active = True
+                            self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                            self.exp_execution_thread.daemon = True
+                            self.exp_execution_thread.start()
+                        else:
+                            self.logger.log_info("Experiment execution already running, not starting new thread.")
+            else:
+                self.logger.log_error("No response received from cache status service")
+                resp.success = True
+                resp.err_msg = "Cache status check failed. Proceeding with normal execution."
+        except Exception as e:
+            self.logger.log_error(f"Error checking cache status: {e}")
             resp.success = True
-            return resp
+            resp.err_msg = f"Cache status check failed: {str(e)}. Proceeding with normal execution."
+
+        return resp

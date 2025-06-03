@@ -51,7 +51,33 @@ from ras_common.globals import RAS_CONFIGS_PATH, RAS_CACHE_PATH
 from ras_interfaces.srv import CheckCacheStatus
 
 class TrajectoryLogger(LifecycleNode):
+    """
+    A ROS2 node that handles receiving and executing experiment data on the robot.
+
+    This node is responsible for:
+    1. Receiving experiment data from the server
+    2. Managing experiment execution on the robot
+    3. Tracking executed steps for each experiment
+    4. Providing cache status information
+    5. Logging execution status
+
+    The node maintains state about:
+    - Currently executing experiment
+    - Steps that have been executed
+    - Cache status of experiments
+    """
+
     def __init__(self):
+        """
+        Initialize the TrajectoryLogger node.
+
+        Sets up:
+        1. MQTT clients for communication
+        2. Service servers for cache status and path loading
+        3. File client for data transfer
+        4. AWS IoT connection
+        5. Step tracking system
+        """
         super().__init__('trajectory_logger')
         self.logger = RasLogger()
         my_callback_group = ReentrantCallbackGroup()
@@ -71,7 +97,7 @@ class TrajectoryLogger(LifecycleNode):
         self.executed_steps = {}  # Format: {(exp_id, hash_id): set(executed_step_numbers)}
 
         # Create cache status service server
-        self.create_service(CheckCacheStatus, 'cache_status', self.cache_status_callback, callback_group=my_callback_group)
+        self.create_service(CheckCacheStatus, '/cache_status', self.cache_status_callback, callback_group=my_callback_group)
 
         # Connect to AWS IoT
         self.connect_to_aws()
@@ -79,11 +105,27 @@ class TrajectoryLogger(LifecycleNode):
         self.payload = ''
 
     def get_executed_steps(self, exp_id, hash_id):
-        """Get the set of executed steps for a given experiment and hash"""
+        """
+        Gets the set of steps that have been executed for a specific experiment and hash.
+
+        Args:
+            exp_id (str): The experiment ID
+            hash_id (str): The hash ID of the experiment
+
+        Returns:
+            set: Set of step numbers that have been executed
+        """
         return self.executed_steps.get((exp_id, hash_id), set())
 
     def mark_step_executed(self, exp_id, hash_id, step_number):
-        """Mark a step as executed for a given experiment and hash"""
+        """
+        Marks a step as executed for a specific experiment and hash.
+
+        Args:
+            exp_id (str): The experiment ID
+            hash_id (str): The hash ID of the experiment
+            step_number (int): The step number to mark as executed
+        """
         if (exp_id, hash_id) not in self.executed_steps:
             self.executed_steps[(exp_id, hash_id)] = set()
         self.executed_steps[(exp_id, hash_id)].add(step_number)
@@ -99,10 +141,25 @@ class TrajectoryLogger(LifecycleNode):
     def cache_status_callback(self, request, response):
         """
         Callback for the cache_status service.
-        Checks if the cache for the requested experiment ID is present.
+
+        This function:
+        1. Checks if the requested experiment and hash exist in the cache
+        2. Verifies the cache contains the necessary trajectory files
+        3. Returns the cache status
+
+        Args:
+            request (CheckCacheStatus.Request): Request containing:
+                - experiment_id (str): ID of the experiment to check
+                - hash_id (str): Hash ID of the experiment
+            response (CheckCacheStatus.Response): Response containing:
+                - cache_present (bool): Whether the cache exists
+
+        Returns:
+            CheckCacheStatus.Response: Response indicating cache status
         """
         experiment_id = request.experiment_id
-        self.logger.log_info(f"Received cache_status request for experiment: {experiment_id}")
+        hash_id = request.hash_id
+        self.logger.log_info(f"Received cache_status request for experiment: {experiment_id} with hash: {hash_id}")
 
         configs_path = RAS_CACHE_PATH
         if not configs_path:
@@ -111,22 +168,71 @@ class TrajectoryLogger(LifecycleNode):
             return response
 
         # Construct the potential extraction path within the robot cache
-        cache_exp_dir = os.path.join(configs_path, "robot", experiment_id)
+        cache_exp_dir = os.path.join(configs_path, "robot", experiment_id, hash_id)
 
-        # Check if the cache for this experiment already exists and contains trajectory files
-        # Checking for traj_dir_path existence implies the full cache structure was created
+        # Check if the cache for this experiment and hash exists and contains trajectory files
         traj_dir_path = os.path.join(cache_exp_dir, "trajectory")
         cache_present = os.path.exists(traj_dir_path) and os.path.isdir(traj_dir_path) and any(f.endswith('.xml') or f.endswith('.txt') for f in os.listdir(traj_dir_path))
 
-        self.logger.log_info(f"Cache status for experiment '{experiment_id}': {cache_present}")
+        self.logger.log_info(f"Cache status for experiment '{experiment_id}' with hash '{hash_id}': {cache_present}")
 
-        # If cache is present, just report it. Do NOT trigger execution here.
-        # Execution is triggered by the ExecuteExp action goal received in custom_callback.
         response.cache_present = cache_present
-
         return response
 
+    def execute_behavior_tree(self, bt_path, step_number, experiment_name, hash_id):
+        """
+        Executes a behavior tree and logs its status.
+
+        This function:
+        1. Executes the behavior tree
+        2. Logs the execution status
+        3. Marks the step as executed if successful
+        4. Updates the status log service
+
+        Args:
+            bt_path (str): Path to the behavior tree XML file
+            step_number (int): The step number being executed
+            experiment_name (str): Name of the experiment
+            hash_id (str): Hash ID of the experiment
+
+        Returns:
+            bool: True if execution was successful, False otherwise
+        """
+        self.logger.log_info(f"Executing behavior tree step: {bt_path}")
+        status = self.batman.execute_bt(bt_path)
+        
+        if status not in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
+            self.logger.log_error(f"Behavior Tree Execution Failed with status {status}")
+            self.call_status_log_service('FAILED')
+            return False
+        else:
+            # Mark step as executed
+            self.mark_step_executed(experiment_name, hash_id, step_number)
+            self.logger.log_info(f"Marked step {step_number} as executed")
+            self.call_status_log_service('SUCCESS')
+            return True
+
     def custom_callback(self, message):
+        """
+        Callback for handling incoming experiment data.
+
+        This function:
+        1. Extracts experiment name and hash from the message
+        2. Downloads and extracts the experiment data
+        3. Executes the behavior trees in sequence
+        4. Tracks executed steps
+        5. Logs execution status
+
+        The function handles both new and existing experiments:
+        - New experiments: Executes the first step
+        - Existing experiments: Executes only new steps
+
+        Args:
+            message (bytes): The incoming message containing the zip filename
+
+        Returns:
+            str: JSON string containing the execution status
+        """
         # The message now contains the zip filename with hash
         self.payload = message.decode("utf-8")
         zip_filename = self.payload.strip()
@@ -218,6 +324,7 @@ class TrajectoryLogger(LifecycleNode):
         if not bt_files:
             self.logger.log_warn(f"No real_stepX.xml files found in {traj_dir_path}")
             overall_success = False
+            self.call_status_log_service('FAILED')
         else:
             self.logger.log_info(f"Found behavior tree steps: {bt_files}")
             
@@ -227,14 +334,7 @@ class TrajectoryLogger(LifecycleNode):
                 step_number = int(bt_file[len("real_step"): -len(".xml")])
                 bt_path = os.path.join(traj_dir_path, bt_file)
                 self.logger.log_info(f"Executing first step of new experiment: {bt_file}")
-                status = self.batman.execute_bt(bt_path)
-                if status not in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
-                    self.logger.log_error(f"Behavior Tree Execution Failed for {bt_file} with status {status}")
-                    overall_success = False
-                else:
-                    # Mark step as executed
-                    self.mark_step_executed(experiment_name, hash_id, step_number)
-                    self.logger.log_info(f"Marked step {step_number} as executed")
+                overall_success = self.execute_behavior_tree(bt_path, step_number, experiment_name, hash_id)
             else:
                 # For existing experiment, get executed steps and execute only the new step
                 executed_steps = self.get_executed_steps(experiment_name, hash_id)
@@ -249,33 +349,27 @@ class TrajectoryLogger(LifecycleNode):
                         continue
                     
                     bt_path = os.path.join(traj_dir_path, bt_file)
-                    self.logger.log_info(f"Executing behavior tree step: {bt_file}")
-                    status = self.batman.execute_bt(bt_path)
-                    if status not in [BTNodeStatus.SUCCESS, BTNodeStatus.IDLE]:
-                        self.logger.log_error(f"Behavior Tree Execution Failed for {bt_file} with status {status}")
+                    step_success = self.execute_behavior_tree(bt_path, step_number, experiment_name, hash_id)
+                    if not step_success:
                         overall_success = False
                         break # Stop executing further steps if one fails
-                    else:
-                        # Mark step as executed
-                        self.mark_step_executed(experiment_name, hash_id, step_number)
-                        self.logger.log_info(f"Marked step {step_number} as executed")
-
-        if overall_success:
-            self.logger.log_info("All Behavior Tree steps executed successfully")
-            final_status = True
-            # Call the status logging service
-            self.call_status_log_service('SUCCESS')
-        else:
-            self.logger.log_info("Behavior Tree Execution Failed for one or more steps")
-            final_status = False
-            # Call the status logging service with failure status
-            self.call_status_log_service('FAILED')
 
         # The response payload should indicate the execution status
-        payload = json.dumps({"status": final_status})
+        payload = json.dumps({"status": overall_success})
         return payload
         
     def call_status_log_service(self, status_value):
+        """
+        Calls the status logging service to update execution status.
+
+        This function:
+        1. Waits for the status logging service to be available
+        2. Creates and sends a status update request
+        3. Handles the response asynchronously
+
+        Args:
+            status_value (str): The status to log ('SUCCESS' or 'FAILED')
+        """
         # Wait for service to be available
         if not self.status_client.wait_for_service(timeout_sec=1.0):
             self.logger.log_warn('Status logging service not available')

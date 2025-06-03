@@ -1,3 +1,4 @@
 string experiment_id
+string hash_id
 ---
 bool cache_present

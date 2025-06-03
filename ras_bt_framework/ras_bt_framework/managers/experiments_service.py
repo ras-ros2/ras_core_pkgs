@@ -34,11 +34,6 @@ from ras_logging.ras_logger import RasLogger
 from ras_interfaces.srv import ReportRobotState
 from std_srvs.srv import Trigger
 from ras_bt_framework.config import action_mapping
-
-# Define a new service type for checking cache status
-# Assuming a srv file named CheckCacheStatus.srv exists in ras_interfaces/srv
-# Request: string experiment_id
-# Response: bool cache_present
 from ras_interfaces.srv import CheckCacheStatus
 
 class ExperimentService(Node):
@@ -58,9 +53,6 @@ class ExperimentService(Node):
 
     # File to store experiment hashes
     HASH_FILE = os.path.join(RAS_CONFIGS_PATH, "experiment_file_hashes.json")
-
-    # # File to store experiment trajectory folder hashes
-    # TRAJ_HASH_FOLDER = os.path.join(RAS_CONFIGS_PATH, "experiment_traj_hashes.json")
 
     # Directory for caching behavior trees and trajectories
     CACHE_DIR = os.path.join(RAS_CACHE_PATH, "server")
@@ -106,56 +98,13 @@ class ExperimentService(Node):
         self.create_service(ReportRobotState, "/report_robot_state", self.report_robot_state_callback, callback_group=self.my_callback_group)
         
         # Create cache status service client
-        # Assuming CheckCacheStatus.srv exists in ras_interfaces/srv
-        self.cache_status_client = self.create_client(CheckCacheStatus, 'cache_status', callback_group=self.my_callback_group)
+        self.cache_status_client = self.create_client(CheckCacheStatus, '/cache_status', callback_group=self.my_callback_group)
 
         # Attempt to recover experiment state on startup
         self.recover_experiment_state()
 
         # Add /resume_experiment service
         self.create_service(Trigger, "/resume_experiment", self.resume_experiment_callback)
-
-    # def load_traj_hash(self, exp_id):
-    #     if os.path.exists(self.TRAJ_HASH_FOLDER):
-    #         if os.path.getsize(self.TRAJ_HASH_FOLDER) == 0:
-    #             return None
-    #         try:
-    #             with open(self.TRAJ_HASH_FOLDER, 'r') as f:
-    #                 hashes = json.load(f)
-    #             return hashes.get(exp_id)
-    #         except Exception as e:
-    #             self.logger.log_error(f"Error loading traj hashes: {e}")
-    #     return None
-    
-    # def calculate_traj_hash(self, traj_hash_path):
-    #     """Compute SHA256 hash over all files in folder (sorted order, including file content and relative path)."""
-    #     hash_sha256 = hashlib.sha256()
-    #     for root, dirs, files in os.walk(folder_path):
-    #         files.sort()
-    #         for fname in files:
-    #             fpath = os.path.join(root, fname)
-    #             rel_path = os.path.relpath(fpath, folder_path)
-    #             hash_sha256.update(rel_path.encode())
-    #             with open(fpath, 'rb') as f:
-    #                 while True:
-    #                     chunk = f.read(4096)
-    #                     if not chunk:
-    #                         break
-    #                     hash_sha256.update(chunk)
-    #     return hash_sha256.hexdigest()
-
-    # def save_traj_hash(self, exp_id, traj_hash):
-    #     try:
-    #         hashes = {}
-    #         if os.path.exists(self.TRAJ_HASH_FOLDER) and os.path.getsize(self.TRAJ_HASH_FOLDER) > 0:
-    #             with open(self.TRAJ_HASH_FOLDER, 'r') as f:
-    #                 hashes = json.load(f)
-    #         hashes[exp_id] = traj_hash
-    #         with open(self.TRAJ_HASH_FOLDER, 'w') as f:
-    #             json.dump(hashes, f, indent=2)
-    #         self.logger.log_info(f"Saved folder hash for experiment {exp_id}")
-    #     except Exception as e:
-    #         self.logger.log_error(f"Error saving folder hash: {e}")
 
     def save_experiment_state(self):
         state = {
@@ -330,17 +279,23 @@ class ExperimentService(Node):
     
     def check_experiment_changed(self, exp_id, file_path):
         """
-        Check if an experiment file has changed by comparing its hash with the cache directory structure.
-        
+        Checks if an experiment file has changed by comparing its hash with the cache directory structure.
+
+        This function:
+        1. Calculates the current hash of the experiment file
+        2. Checks if this is the first time loading this experiment
+        3. Compares the hash with existing cache directories
+        4. Saves the new hash if the experiment has changed
+
         Args:
-            exp_id (str): Experiment ID
-            file_path (str): Path to the experiment file
-            
+            exp_id (str): The ID of the experiment to check
+            file_path (str): Path to the experiment YAML file
+
         Returns:
-            tuple: (bool, str) - (has_changed, current_hash)
-                - has_changed: True if the file has changed, False if unchanged or first time loading
-                - current_hash: The current hash of the file
-                - is_first_time: True if this is the first time loading this experiment
+            tuple: (has_changed, current_hash, is_first_time)
+                - has_changed (bool): True if the file has changed, False if unchanged
+                - current_hash (str): The current hash of the file
+                - is_first_time (bool): True if this is the first time loading this experiment
         """
         # Calculate current hash
         current_hash = self.calculate_file_hash(file_path)
@@ -435,8 +390,21 @@ class ExperimentService(Node):
 
     def decide_recovery_action(self):
         """
-        Decide the appropriate recovery action based on experiment and robot state.
-        Automatically resume experiment if safe.
+        Decides the appropriate recovery action based on experiment and robot state.
+
+        This function:
+        1. Checks the current experiment state
+        2. Evaluates the robot's current state
+        3. Automatically resumes the experiment if safe to do so
+        4. Provides appropriate logging and warnings
+
+        The function handles different robot states:
+        - idle/paused: Automatically resumes experiment
+        - running: Requires manual intervention
+        - error: Requires manual intervention
+        - unknown: Requires manual intervention
+
+        Safety checks are performed before any automatic recovery action.
         """
 
         exp_state = getattr(self, 'current_experiment_id', None)
@@ -484,13 +452,21 @@ class ExperimentService(Node):
 
     def simulate_current_step(self):
         """
-        Simulate the current step in the sequence:
-        1. Generate simulation trajectory
-        2. Run simulation
-        3. Generate real robot trajectory (but don't execute it)
-        
+        Simulates the current step in the experiment sequence.
+
+        This function:
+        1. Generates simulation trajectory
+        2. Runs simulation
+        3. Generates real robot trajectory
+        4. Caches the behavior tree if needed
+        5. Sends execution command to real robot
+
+        The function handles both cached and non-cached behavior trees:
+        - If cached: Uses the cached behavior tree directly
+        - If not cached: Generates new behavior tree and caches it
+
         Returns:
-            bool: True if successful, False otherwise
+            bool: True if simulation was successful, False otherwise
         """
         if self.current_step_index >= self.total_steps:
             self.logger.log_info("All steps completed successfully")
@@ -524,11 +500,6 @@ class ExperimentService(Node):
         step_name = f"Step{self.current_step_index + 1}"
         
         self.logger.log_info(f"Processing step {self.current_step_index + 1}/{self.total_steps}: {current_step}")
-        
-        # Reset counter for this step
-        # counter_reset = SetBool.Request()
-        # counter_reset.data = True
-        # self.counter_reset_client.call_async(counter_reset)
         
         if not use_cached:
             # Generate module for single step
@@ -602,22 +573,22 @@ class ExperimentService(Node):
             except Exception as e:
                 self.logger.log_error(f"Error generating trajectory for real robot: {e}", e)
                 return False
-        
-        # else:
-        #     # We're using cached behavior tree, check if we need to copy trajectory files
-        #     # traj_cache_dir = self.get_trajectory_cache_dir(self.current_experiment_id)
-        #     traj_dir = os.path.join(pkg_path, "xml", "trajectory")
-            
-        #     # Ensure trajectory directory exists
-        #     os.makedirs(traj_dir, exist_ok=True)
 
         self.sim_complete = True
         return True
     
     def send_execute_exp_goal(self):
         """
-        Send a goal to the /execute_exp action server to run the experiment on the real robot.
-        Includes the current experiment hash in the goal message.
+        Sends a goal to the /execute_exp action server to run the experiment on the real robot.
+
+        This function:
+        1. Waits for the action server to be available
+        2. Creates a goal message with the current experiment hash
+        3. Sends the goal asynchronously
+        4. Falls back to command line approach if action server is not available
+
+        The function includes the current experiment hash in the goal message
+        to ensure the robot uses the correct cached version of the experiment.
         """
         # Wait for action server
         if not self.execute_exp_client.wait_for_server(timeout_sec=1.0):
@@ -848,7 +819,24 @@ class ExperimentService(Node):
     
     def exp_execution_thread_func(self):
         """
-        Thread function that handles the experiment execution flow.
+        Main thread function that handles the experiment execution flow.
+
+        This function:
+        1. Processes each step in the experiment sequence
+        2. Handles simulation and real robot execution
+        3. Manages experiment state and recovery
+        4. Handles transport service restarts
+        5. Saves experiment state after each step
+
+        The function runs in a loop until:
+        - All steps are completed
+        - An error occurs
+        - The experiment is stopped manually
+
+        The function includes safety features:
+        - Timeout handling for real robot execution
+        - Transport service management
+        - State persistence for recovery
         """
         
         while self.exp_execution_active and self.current_step_index < self.total_steps:
@@ -909,7 +897,7 @@ class ExperimentService(Node):
                     break
                 
                 elapsed_time += polling_interval
-                if elapsed_time == 60:  # Call restart_transport_services exactly at 60 seconds
+                if elapsed_time == 120:  # Call restart_transport_services exactly at 60 seconds
                     self.logger.log_info("60 seconds elapsed, restarting transport services...")
                     self.restart_transport_services()
                     self.stop_exp_execution()
@@ -963,14 +951,26 @@ class ExperimentService(Node):
     
     def execute_experiment_callback(self, req, resp):
         """
-        Start the experiment flow that will process all steps in sequence.
-        
+        Callback function for the /execute_experiment service. This is the main entry point for starting a new experiment.
+
+        The function performs the following steps:
+        1. Loads the experiment YAML file
+        2. Saves the experiment ID for logging purposes
+        3. Checks if the experiment has changed since last run
+        4. Loads and registers all poses from the experiment
+        5. Checks if the experiment is cached on the robot
+        6. Starts the experiment execution thread
+
         Args:
-            req: Service request to start the automated flow
-            resp: Service response indicating success or failure
-            
+            req (LoadExp.Request): Service request containing:
+                - exepriment_id (str): ID of the experiment to execute
+            resp (LoadExp.Response): Service response containing:
+                - success (bool): Whether the experiment was successfully loaded
+                - experiment_changed (bool): Whether the experiment has changed since last run
+                - message (str): Status message about the experiment loading
+
         Returns:
-            The updated service response with success status
+            LoadExp.Response: Response indicating success/failure and experiment status
         """
 
         exp_id = req.exepriment_id
@@ -1023,10 +1023,11 @@ class ExperimentService(Node):
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
 
-        # --- Cache Check Logic ---
-        self.logger.log_info(f"Checking cache status for experiment '{exp_id}' on robot...")
+        # Check cache status on robot
+        self.logger.log_info(f"Checking cache status for experiment '{exp_id}' with hash '{current_hash}' on robot...")
         cache_status_req = CheckCacheStatus.Request()
         cache_status_req.experiment_id = exp_id
+        cache_status_req.hash_id = current_hash
 
         # Wait for the cache_status service to be available
         if not self.cache_status_client.wait_for_service(timeout_sec=5.0):
@@ -1034,34 +1035,29 @@ class ExperimentService(Node):
             # If service is not available, proceed with normal execution flow
             self.logger.log_info("Starting the experiment execution (no cache check)...")
             with self.exp_execution_lock:
-                 if not self.exp_execution_active:
-                     self.exp_execution_active = True
-                     self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
-                     self.exp_execution_thread.daemon = True
-                     self.exp_execution_thread.start()
-            resp.success = True # Indicate success for loading and starting flow
+                if not self.exp_execution_active:
+                    self.exp_execution_active = True
+                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                    self.exp_execution_thread.daemon = True
+                    self.exp_execution_thread.start()
+            resp.success = True
             return resp
             
         # Call the cache_status service
         future = self.cache_status_client.call_async(cache_status_req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=10.0) # Wait for the response
+        rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
 
         if future.result() is not None:
             cache_present = future.result().cache_present
-            self.logger.log_info(f"Cache status response for '{exp_id}': {cache_present}")
+            self.logger.log_info(f"Cache status response for '{exp_id}' with hash '{current_hash}': {cache_present}")
 
             if cache_present:
-                self.logger.log_info(f"Cache found on robot for experiment '{exp_id}'. Robot will execute locally.")
-                
-                # Prepare response message indicating cache was found
-                resp.success = True 
+                self.logger.log_info(f"Cache found on robot for experiment '{exp_id}' with hash '{current_hash}'. Robot will execute locally.")
+                resp.success = True
                 resp.message = f"Cache found on robot for experiment '{exp_id}'. Robot will execute locally."
-                # Do NOT return here, continue to start the execution thread
-
             else:
-                self.logger.log_info(f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution.")
-                # Prepare response message indicating cache was not found
-                resp.success = True # Indicate success for loading and starting flow
+                self.logger.log_info(f"Cache not found on robot for experiment '{exp_id}' with hash '{current_hash}'. Proceeding with normal execution.")
+                resp.success = True
                 resp.message = f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution."
 
             # In both cases (cache found or not found), start the experiment execution flow
@@ -1075,18 +1071,17 @@ class ExperimentService(Node):
                 else:
                     self.logger.log_info("Experiment execution already running, not starting new thread.")
             
-            # Return the prepared response after starting the thread
             return resp
 
         else:
             self.logger.log_error("Failed to call cache_status service. Proceeding without cache check.")
             # If service call fails, fall back to normal execution flow
-            self.logger.log_info("Starting the experiment execution (cache check failed)....") # Corrected log message
+            self.logger.log_info("Starting the experiment execution (cache check failed)...")
             with self.exp_execution_lock:
-                 if not self.exp_execution_active:
-                     self.exp_execution_active = True
-                     self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
-                     self.exp_execution_thread.daemon = True
-                     self.exp_execution_thread.start()
-            resp.success = True # Indicate success for loading and starting flow
+                if not self.exp_execution_active:
+                    self.exp_execution_active = True
+                    self.exp_execution_thread = threading.Thread(target=self.exp_execution_thread_func)
+                    self.exp_execution_thread.daemon = True
+                    self.exp_execution_thread.start()
+            resp.success = True
             return resp

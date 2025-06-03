@@ -33,8 +33,30 @@ if APP_TYPE == "server":
     from rclpy.action.server import ServerGoalHandle
 
 class LinkHandler(Node):
+    """
+    A ROS2 node that handles sending experiment data to the robot.
+
+    This node is responsible for:
+    1. Receiving experiment execution requests
+    2. Packaging experiment data into zip files
+    3. Sending the data to the robot via MQTT
+    4. Managing the connection with AWS IoT
+
+    The node can operate in two modes:
+    - Server mode: Packages and sends experiment data to the robot
+    - Robot mode: Receives and processes experiment data
+    """
 
     def __init__(self):
+        """
+        Initialize the LinkHandler node.
+
+        Sets up:
+        1. MQTT clients for communication
+        2. Action server for experiment execution
+        3. File client for data transfer
+        4. AWS IoT connection
+        """
         super().__init__('link_sender')
         self.logger = RasLogger()
 
@@ -48,17 +70,33 @@ class LinkHandler(Node):
         self.mqtt_sub_response_flag = False
         self.mqtt_sub_msg = None
         self.remote_bt_client = TransportServiceClient("remote_bt")
+        self.remote_cache_status_client = TransportServiceClient("cache_status")
         self.connect_to_aws()
         self.experiment_name = None
 
-        #TODO - implement an action client which will request for the successful download of image true/false before makeing another call to execute_exp in line numebr 105. so basically it has to wait until the image is receivnd and then make another call to execute exp.
-        
     def connect_to_aws(self):
         self.remote_bt_client.connect_with_retries()
+        self.remote_cache_status_client.connect_with_retries()
         self.file_client.connect_with_retries()
 
 
     def send_callback(self, goal_handle):
+        """
+        Callback function for the /execute_exp action server.
+
+        This function:
+        1. Reads the current experiment name
+        2. Gets the experiment hash from the goal
+        3. Creates a zip file of the experiment data
+        4. Sends the data to the robot
+        5. Returns the execution result
+
+        Args:
+            goal_handle (ServerGoalHandle): The goal handle containing the experiment hash
+
+        Returns:
+            ExecuteExp.Result: Result indicating success/failure of the operation
+        """
         self.logger.log_info("Starting Real Arm.....")
 
         # Read experiment name from current_experiment.txt
@@ -100,6 +138,21 @@ class LinkHandler(Node):
         return result
 
     def send_zip_file_path(self, zip_file_path, hash_id) -> str:
+        """
+        Sends a zip file to the robot and triggers its execution.
+
+        This function:
+        1. Uploads the zip file using the file client
+        2. Sends a message to the robot to execute the experiment
+        3. Returns the execution status
+
+        Args:
+            zip_file_path (str): Path to the zip file to send
+            hash_id (str): Hash ID of the experiment
+
+        Returns:
+            str: JSON string containing the execution status
+        """
         request = SetPath.Request()
         request.path = zip_file_path
 
@@ -119,6 +172,21 @@ class LinkHandler(Node):
 
 
     def zip_xml_directory(self, experiment_name, hash_id):
+        """
+        Creates a zip file containing the experiment data.
+
+        This function:
+        1. Locates the experiment data in the cache
+        2. Creates a zip file with the experiment data
+        3. Handles different paths for server and robot modes
+
+        Args:
+            experiment_name (str): Name of the experiment
+            hash_id (str): Hash ID of the experiment
+
+        Returns:
+            str: Path to the created zip file, or empty string if failed
+        """
         cache_path = os.path.join(RAS_CACHE_PATH, "server")
         cache_exp_path = os.path.join(cache_path, experiment_name, hash_id)
         # pkg_path = get_cmake_python_pkg_source_dir("ras_bt_framework")

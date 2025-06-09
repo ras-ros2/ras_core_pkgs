@@ -242,6 +242,9 @@ class TrajectoryLogger(LifecycleNode):
                     self.logger.log_info(f"Successfully downloaded image: {extract_path}/{image_filename}")
                 else:
                     self.logger.log_warn(f"Failed to download image: {image_filename}")
+
+                #TODO - implement a action server to send the status of successfullly downloaded image whether true or false to client when requested for status by iot_sender(which will have action client there.)
+                
             else:
                 self.logger.log_warn("No image filename found in this message.")
 
@@ -320,24 +323,44 @@ class TrajectoryLogger(LifecycleNode):
                     json.dump(log_data_to_save, f, indent=2)
                 self.logger.log_info(f"Saved JSON data to: {json_file_path}")
 
-            if self.aruco_sync_flag == False:
-                aruco_pose = ArucoPoses.Request()
-                poses_list = json.loads(log_data["aruco_markers"])["poses"]
-                marker_id_list = json.loads(log_data["aruco_markers"])["marker_ids"]
+            # Check if this message contains ArUco marker data
+            if "aruco_markers" in log_data:
+                try:
+                    self.logger.log_info("Found ArUco marker data in MQTT message")
+                    aruco_pose = ArucoPoses.Request()
+                    aruco_data = json.loads(log_data["aruco_markers"])
+                    poses_list = aruco_data["poses"]
+                    marker_id_list = aruco_data["marker_ids"]
 
-                aruco_pose.marker_id_list = marker_id_list
+                    self.logger.log_info(f"ArUco marker IDs received from MQTT: {marker_id_list}")
+                    self.logger.log_info(f"Processing {len(poses_list)} ArUco markers")
 
-                aruco_pose.poses = [
-                    Pose(
-                        position=Point(x=pose["position"]["x"], y=pose["position"]["y"], z=pose["position"]["z"]),
-                        orientation=Quaternion(x=pose["orientation"]["x"], y=pose["orientation"]["y"], z=pose["orientation"]["z"], w=pose["orientation"]["w"])
-                    ) for pose in poses_list
-                ]
-                
-                self.aruco_client.call_async(aruco_pose)
-                self.logger.log_info("Spawing Started...")
-                # self.aruco_sync_flag = False
-                
+                    # Print details of each marker for debugging
+                    for idx, (marker_id, pose) in enumerate(zip(marker_id_list, poses_list)):
+                        self.logger.log_info(f"Marker {idx+1}: ID={marker_id}, " + 
+                                            f"Position=({pose['position']['x']}, {pose['position']['y']}, {pose['position']['z']})")
+
+                    aruco_pose.marker_id_list = marker_id_list
+
+                    aruco_pose.poses = [
+                        Pose(
+                            position=Point(x=pose["position"]["x"], y=pose["position"]["y"], z=pose["position"]["z"]),
+                            orientation=Quaternion(x=pose["orientation"]["x"], y=pose["orientation"]["y"], z=pose["orientation"]["z"], w=pose["orientation"]["w"])
+                        ) for pose in poses_list
+                    ]
+                    
+                    # Check if the ArUco service is available
+                    if not self.aruco_client.service_is_ready():
+                        self.logger.log_error("WARNING: ArUco service is not available! Make sure aruco_experiment_manager.py is running.")
+                    else:
+                        # Call the ArUco service
+                        self.logger.log_info("Sending ArUco marker data to /aruco_poses service...")
+                        future = self.aruco_client.call_async(aruco_pose)
+                        # Don't wait for the service to complete - allow it to process asynchronously
+                        self.logger.log_info("ArUco marker processing started...")
+                except Exception as e:
+                    self.logger.log_error(f"Error processing ArUco marker data: {e}")
+            
             if log_data.get("traj_status") == "SUCCESS" or log_data.get("traj_status", "").startswith("SUCCESS_"):
                 # self.logger.log_info("trajectory execution successful")
                 request = JointSat.Request()

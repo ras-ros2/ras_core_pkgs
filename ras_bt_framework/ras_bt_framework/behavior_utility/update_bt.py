@@ -126,6 +126,7 @@ def update_bt(behavior: BehaviorModule, sequence=None):
                 lowered_pose_child = ExecuteTrajectory(i_sequence=sequence.get())
                 new_children.append(lowered_pose_child)
                 new_children.append(LoggerClientTrigger())
+                sequence.inc()
                 
                 # Then add the gripper control action
                 # Extract the grip_state value from the PickFront primitive

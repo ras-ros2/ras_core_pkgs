@@ -670,7 +670,7 @@ MoveitServer::MoveitServer(std::shared_ptr<rclcpp::Node> move_group_node)
 
       // Step 3: Move to the next pose with z -= 0.1
       geometry_msgs::msg::Pose safe_pose = request->target_pose;
-      safe_pose.position.z += 0.05;
+      safe_pose.position.x -= 0.05;
       // safe_pose.position.z += 0.05;
 
       RCLCPP_INFO(this->get_logger(), "Moving to safe pose: x=%f, y=%f, z=%f", 

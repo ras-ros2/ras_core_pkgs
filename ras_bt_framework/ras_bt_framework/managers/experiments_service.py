@@ -71,7 +71,7 @@ class ExperimentService(Node):
         self.create_service(LoadExp, "/execute_experiment", self.execute_experiment_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/sim_step", self.sim_step_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/next_step", self.next_step_callback, callback_group=self.my_callback_group)
-        self.counter_reset_client = self.create_client(SetBool, '/reset_counter', callback_group=self.my_callback_group)
+        # self.counter_reset_client = self.create_client(SetBool, '/reset_counter', callback_group=self.my_callback_group)    #need to remove
         
         # Add action client for execute_exp
         self.execute_exp_client = ActionClient(self, ExecuteExp, '/execute_exp', callback_group=self.my_callback_group)
@@ -98,7 +98,7 @@ class ExperimentService(Node):
         self.create_service(ReportRobotState, "/report_robot_state", self.report_robot_state_callback, callback_group=self.my_callback_group)
         
         # Create transport service client for cache status
-        self.transport_cache_client = TransportServiceClient("remote_bt")
+        self.transport_cache_client = TransportServiceClient("remote_cache_check")
 
         # Attempt to recover experiment state on startup
         self.recover_experiment_state()
@@ -142,10 +142,10 @@ class ExperimentService(Node):
         os.makedirs(exp_cache_dir, exist_ok=True)
         return exp_cache_dir
         
-    def get_trajectory_cache_dir(self, exp_id):
-        """Get the trajectory cache directory for an experiment."""
-        traj_cache_dir = self.get_experiment_cache_dir(exp_id)
-        return traj_cache_dir
+    # def get_trajectory_cache_dir(self, exp_id):
+    #     """Get the trajectory cache directory for an experiment."""
+    #     traj_cache_dir = self.get_experiment_cache_dir(exp_id)
+    #     return traj_cache_dir
         
     def cache_behavior_tree(self, exp_id, step_number, source_path):
         """Cache a behavior tree for a specific experiment step."""
@@ -160,25 +160,25 @@ class ExperimentService(Node):
             self.logger.log_error(f"Error caching behavior tree: {e}")
             return None
             
-    def _files_are_identical(self, file1, file2):
-        """Check if two files are identical by comparing their contents."""
-        try:
-            with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
-                return f1.read() == f2.read()
-        except Exception:
-            return False
+    # def _files_are_identical(self, file1, file2):   #
+    #     """Check if two files are identical by comparing their contents."""
+    #     try:
+    #         with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
+    #             return f1.read() == f2.read()
+    #     except Exception:
+    #         return False
             
-    def cache_trajectories(self, exp_id, source_dir):
-        """Cache all trajectory files from a source directory."""
-        traj_cache_dir = self.get_trajectory_cache_dir(exp_id)
+    # def cache_trajectories(self, exp_id, source_dir):
+    #     """Cache all trajectory files from a source directory."""
+    #     traj_cache_dir = self.get_trajectory_cache_dir(exp_id)
         
-        try:
-            # Create trajectory directory if it doesn't exist
-            os.makedirs(traj_cache_dir, exist_ok=True)
-            return True
-        except Exception as e:
-            self.logger.log_error(f"Error caching trajectories: {e}")
-            return False
+    #     try:
+    #         # Create trajectory directory if it doesn't exist
+    #         os.makedirs(traj_cache_dir, exist_ok=True)
+    #         return True
+    #     except Exception as e:
+    #         self.logger.log_error(f"Error caching trajectories: {e}")
+    #         return False
             
     def get_cached_behavior_tree(self, exp_id, step_number):
         """Get a cached behavior tree for a specific experiment step."""
@@ -202,22 +202,22 @@ class ExperimentService(Node):
         else:
             return False
             
-    def clear_experiment_cache(self, exp_id):
-        """Clear the cache for a specific experiment."""
-        exp_cache_dir = self.get_experiment_cache_dir(exp_id)
+    # def clear_experiment_cache(self, exp_id):
+    #     """Clear the cache for a specific experiment."""
+    #     exp_cache_dir = self.get_experiment_cache_dir(exp_id)
         
-        try:
-            if os.path.exists(exp_cache_dir):
-                shutil.rmtree(exp_cache_dir)
-                os.makedirs(exp_cache_dir, exist_ok=True)
-                self.logger.log_info(f"Cleared cache for experiment {exp_id}")
-                return True
-            else:
-                self.logger.log_info(f"No cache found for experiment {exp_id}")
-                return True
-        except Exception as e:
-            self.logger.log_error(f"Error clearing experiment cache: {e}")
-            return False
+    #     try:
+    #         if os.path.exists(exp_cache_dir):
+    #             shutil.rmtree(exp_cache_dir)
+    #             os.makedirs(exp_cache_dir, exist_ok=True)
+    #             self.logger.log_info(f"Cleared cache for experiment {exp_id}")
+    #             return True
+    #         else:
+    #             self.logger.log_info(f"No cache found for experiment {exp_id}")
+    #             return True
+    #     except Exception as e:
+    #         self.logger.log_error(f"Error clearing experiment cache: {e}")
+    #         return False
 
     def calculate_file_hash(self, file_path):
         """
@@ -955,7 +955,7 @@ class ExperimentService(Node):
 
         The function performs the following steps:
         1. Loads the experiment YAML file
-        2. Saves the experiment ID for logging purposes
+        2. Saves the experiment ID for logging purposes  #TODO - remove this and add a response as callback
         3. Checks if the experiment has changed since last run
         4. Loads and registers all poses from the experiment
         5. Checks if the experiment is cached on the robot
@@ -1021,7 +1021,7 @@ class ExperimentService(Node):
         self.stop_exp_execution()
         
         self.logger.log_info(f"Experiment Loaded with {self.total_steps} steps...")
-
+        self.logger.log_info(f"target sequence: {self.target_sequence}")
         # Check cache status on robot using transport service
         self.logger.log_info(f"Checking cache status for experiment '{exp_id}' with hash '{current_hash}' on robot...")
         
@@ -1059,7 +1059,7 @@ class ExperimentService(Node):
                     self.logger.log_info(f"Cache not found on robot for experiment '{exp_id}' with hash '{current_hash}'. Proceeding with normal execution.")
                     resp.success = True
                     resp.err_msg = f"Cache not found on robot for experiment '{exp_id}'. Proceeding with normal execution."
-                    
+
                     # Start the experiment execution thread without waiting
                     self.logger.log_info("Starting the experiment execution thread...")
                     with self.exp_execution_lock:

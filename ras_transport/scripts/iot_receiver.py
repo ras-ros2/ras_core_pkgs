@@ -91,6 +91,7 @@ class TrajectoryLogger(LifecycleNode):
         self.instruction_msg = []
         self.instruction_flag = True
         self.remote_bt_server = TransportServiceServer("remote_bt", self.custom_callback)
+        self.remote_cache_check_server = TransportServiceServer("remote_cache_check", self.custom_callback)
         self.batman = BaTMan()
 
         # Track executed steps for each experiment and hash combination
@@ -129,11 +130,13 @@ class TrajectoryLogger(LifecycleNode):
 
     def connect_to_aws(self):
         self.remote_bt_server.connect_with_retries()
+        self.remote_cache_check_server.connect_with_retries()
         self.file_client.connect_with_retries()
         self.reciever_timer = self.create_timer(0.1, self.timer_callback)
 
     def timer_callback(self):
         self.remote_bt_server.loop()
+        self.remote_cache_check_server.loop()
 
     def custom_callback(self, message):
         """
@@ -454,6 +457,7 @@ def main(args=None):
     finally:
         # Cleanup and disconnect
         receiver.remote_bt_server.disconnect()
+        receiver.remote_cache_check_server.disconnect()
         receiver.logger.log_info("Disconnected from AWS IoT")
         receiver.destroy_node()
         # rclpy.shutdown()

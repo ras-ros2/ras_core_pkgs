@@ -68,6 +68,9 @@ class ExperimentService(Node):
         super().__init__("experiment_service")
         self.logger = RasLogger()
         self.my_callback_group = ReentrantCallbackGroup()
+        
+        # Store calibrated coordinates
+        self.calibrated_coordinates = {'x': 0, 'y': 0}
         self.create_service(LoadExp, "/execute_experiment", self.execute_experiment_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/sim_step", self.sim_step_callback, callback_group=self.my_callback_group)
         self.create_service(SetBool, "/next_step", self.next_step_callback, callback_group=self.my_callback_group)
@@ -105,6 +108,116 @@ class ExperimentService(Node):
 
         # Add /resume_experiment service
         self.create_service(Trigger, "/resume_experiment", self.resume_experiment_callback)
+
+    def parse_calibration_data(self, calibration_file_path=None):
+        """
+        Parse calibration data from JSON file, extract workspace center coordinates,
+        and round them as requested.
+        
+        Args:
+            calibration_file_path (str, optional): Path to the calibration file, relative to RAS_CONFIGS_PATH.
+                If None, defaults to "xarm_timestamp.json".
+        
+        Returns:
+            bool: True if calibration data was successfully parsed, False otherwise.
+        """
+        # Reset calibrated coordinates
+        self.calibrated_coordinates = {'x': 0, 'y': 0}
+        
+        # If no specific file is provided, use the default
+        # if calibration_file_path is None:
+        #     calibration_file_path = "xarm_timestamp.json"
+            
+        # Handle both absolute and relative paths
+        if os.path.isabs(calibration_file_path):
+            calibration_file = calibration_file_path
+        else:
+            # First, check if the file exists in the standard location
+            standard_path = os.path.join(RAS_CONFIGS_PATH, calibration_file_path)
+            
+            # Then, check if it exists in the calibration_configs directory
+            calibration_configs_dir = os.path.join(RAS_CONFIGS_PATH, "calibration_configs")
+            calibration_configs_path = os.path.join(calibration_configs_dir, calibration_file_path)
+            
+            # Check if the specific calibration file exists in the calibration_configs directory
+            if os.path.exists(calibration_configs_path):
+                self.logger.log_info(f"Using specified calibration file: {calibration_file_path}")
+                print(f"\033[1;32m[INFO] Using specified calibration file: {calibration_file_path}\033[0m")
+            elif not os.path.exists(standard_path):
+                # Only return an error if neither path exists
+                self.logger.log_error(f"Specified calibration file not found: {calibration_file_path}")
+                print(f"\033[1;31m[ERROR] Specified calibration file not found: {calibration_file_path}\033[0m")
+                return False
+            
+            # Determine which path to use
+            if os.path.exists(standard_path):
+                calibration_file = standard_path
+            elif os.path.exists(calibration_configs_path):
+                calibration_file = calibration_configs_path
+            else:
+                # Default to standard path for error reporting
+                calibration_file = standard_path
+        
+        if not os.path.exists(calibration_file):
+            self.logger.log_error(f"Calibration file not found: {calibration_file}")
+            print(f"\033[1;31m[ERROR] Calibration file not found: {calibration_file}\033[0m")
+            return False
+            
+        try:
+            with open(calibration_file, 'r') as f:
+                calibration_data = json.load(f)
+                
+            # Check if the data exists
+            if not calibration_data:
+                self.logger.log_warning("Calibration file is empty")
+                print(f"\033[1;33m[WARNING] Calibration file is empty: {calibration_file}\033[0m")
+                return False
+            
+            # Extract calibration data - handle different possible formats
+            
+            # Format 1: Direct x, y coordinates in the root
+            if 'x' in calibration_data and 'y' in calibration_data:
+                x_cm = calibration_data.get('x', 0)
+                y_cm = calibration_data.get('y', 0)
+            
+            # Format 2: Calibration data in a 'calibration' object (from test_service_client.py)
+            elif 'calibration' in calibration_data and isinstance(calibration_data['calibration'], dict):
+                cal_obj = calibration_data['calibration']
+                x_cm = cal_obj.get('x', 0)
+                y_cm = cal_obj.get('y', 0)
+            
+            # Legacy format removed
+            
+            else:
+                self.logger.log_error(f"No valid calibration coordinates found in file: {calibration_file}")
+                print(f"\033[1;31m[ERROR] No valid calibration coordinates found in file: {calibration_file}\033[0m")
+                return False
+                
+            # Round x and y as requested
+            # For x: if decimal part >= 0.5, round up, otherwise round down
+            x_rounded = int(x_cm) + (1 if x_cm - int(x_cm) >= 0.5 else 0)
+            
+            # For y: if decimal part >= 0.5, round up, otherwise round down
+            y_rounded = int(y_cm) + (1 if y_cm - int(y_cm) >= 0.5 else 0)
+            
+            # Store the rounded coordinates in the class attribute
+            self.calibrated_coordinates = {'x': x_rounded, 'y': y_rounded}
+            
+            # Log the original and rounded values
+            self.logger.log_info(f"Calibration data from file: {calibration_file}")
+            self.logger.log_info(f"Calibration workspace center: Original X={x_cm:.2f}cm, Y={y_cm:.2f}cm")
+            self.logger.log_info(f"Calibration workspace center: Rounded X={x_rounded}cm, Y={y_rounded}cm")
+            
+            # Print the rounded values with color formatting
+            print(f"\033[1;32m[CALIBRATION] Using file: {calibration_file}\033[0m")
+            print(f"\033[1;32m[CALIBRATION] Workspace center (rounded): X={x_rounded}cm, Y={y_rounded}cm\033[0m")
+            
+            return True
+        except Exception as e:
+            self.logger.log_error(f"Error parsing calibration data: {e}")
+            print(f"\033[1;31m[ERROR] Failed to parse calibration file: {e}\033[0m")
+            return False
+
 
     def save_experiment_state(self):
         state = {
@@ -431,7 +544,7 @@ class ExperimentService(Node):
             self.logger.log_error(f"Robot is in error state. Manual intervention required before any experiment recovery.")
         else:
             self.logger.log_warn(f"Robot state unknown. Experiment is paused. Run /resume_experiment to continue experiment '{exp_state}' at step {step_idx}.")
-
+        
         self.logger.log_info(f"Ensure the object width should be within the range of 2.2 to 3.8 centimeters as per the gripper constraints.")
 
     def resume_experiment_callback(self, req, resp):
@@ -985,6 +1098,49 @@ class ExperimentService(Node):
         with open(current_exp_path, 'w') as f:
             f.write(exp_id)
         
+        # Load the experiment YAML to check for calibration file path
+        try:
+            with open(path, 'r') as file:
+                exp_data = yaml.safe_load(file)
+                
+            # Check if calibration is specified in the experiment file
+            calibration_file_path = exp_data.get('calibration_file_path', None)
+            
+            # Handle the case where 'None' is a string in YAML
+            if isinstance(calibration_file_path, str) and calibration_file_path.lower() == 'none':
+                calibration_file_path = None
+            
+            # If calibration_file_path is None or False, don't apply any calibration
+            if calibration_file_path is None or calibration_file_path is False:
+                # No calibration needed - use original coordinates without modification
+                self.logger.log_info("No calibration applied for this experiment (using original coordinates)")
+                print("\033[1;33m[INFO] No calibration applied for this experiment (using original coordinates)\033[0m")
+                # Reset calibrated coordinates to None to signal no calibration
+                self.calibrated_coordinates = None
+            # If calibration_file_path is a string, it's a path to a calibration file
+            elif isinstance(calibration_file_path, str):
+                self.logger.log_info(f"Using calibration file specified in experiment: {calibration_file_path}")
+                # Parse calibration data from the specified file
+                calibration_success = self.parse_calibration_data(calibration_file_path)
+                
+                if not calibration_success:
+                    self.logger.log_error(f"Failed to load calibration file: {calibration_file_path}")
+                    print(f"\033[1;31m[ERROR] Failed to load calibration file specified in experiment: {calibration_file_path}\033[0m")
+                    resp.success = False
+                    return resp
+            else:
+                # Unknown calibration value - treat as error
+                self.logger.log_error(f"Invalid calibration value: {calibration_file_path}. Must be None or a relative path.")
+                print(f"\033[1;31m[ERROR] Invalid calibration value: {calibration_file_path}. Must be None or a relative path.\033[0m")
+                resp.success = False
+                return resp
+        except Exception as e:
+            self.logger.log_error(f"Error loading experiment file: {e}")
+            print(f"\033[1;31m[ERROR] Error loading experiment file: {e}\033[0m")
+            resp.success = False
+            return resp
+        
+
         # Check if experiment file has changed since last time
         has_changed, current_hash, is_first_time = self.check_experiment_changed(exp_id, path)
         self.current_experiment_hash = current_hash
@@ -1003,7 +1159,7 @@ class ExperimentService(Node):
         self.experiment_changed = has_changed or is_first_time
 
         # Load the experiment data
-        self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path)
+        self.pose_dict, self.target_sequence = read_yaml_to_pose_dict(path,calibrated_coordinates=self.calibrated_coordinates)
         # Register all poses
         if self.pose_dict is not None:
             for pose_name, pose in self.pose_dict.items():

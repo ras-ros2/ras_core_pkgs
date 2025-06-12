@@ -121,7 +121,19 @@ def check_radius_constraint(pose_name, pose_values):
         return False
     return True
 
-def read_yaml_to_pose_dict(path):
+def read_yaml_to_pose_dict(path, calibrated_coordinates=None):
+    """
+    Read YAML file and convert to pose dictionary and target sequence.
+    
+    Args:
+        path (str): Path to the YAML file
+        calibrated_coordinates (dict, optional): Dictionary with calibrated x, y coordinates
+            to add to the pose values if calibration_file_path flag is set to True in the YAML file.
+            Default is None.
+    
+    Returns:
+        tuple: (pose_dict, target_pose) - Pose dictionary and target sequence
+    """
     print(f"Reading YAML file: {path}")
 
     with open(path, 'r') as file:
@@ -130,13 +142,53 @@ def read_yaml_to_pose_dict(path):
     if 'Poses' not in data:
         raise KeyError("The key 'Poses' is missing from the YAML file.")
     
+    # Check if we should use calibration
+    calibration_file_path = data.get('calibration_file_path', None)
+    
+    # Handle the case where 'None' is a string in YAML
+    if isinstance(calibration_file_path, str) and calibration_file_path.lower() == 'none':
+        calibration_file_path = None
+    
+    # If calibration_file_path is None or False, don't apply any calibration at all
+    if calibration_file_path is None or calibration_file_path is False:
+        logger.log_info("No calibration specified - using original coordinates without modification")
+        print(f"\033[1;33m[INFO] No calibration specified - using original coordinates without modification\033[0m")
+        # Set calibrated_coordinates to None to signal that no calibration should be applied
+        calibrated_coordinates = None
+    # If calibration_file_path is True (legacy support) or a string path, and we have calibrated coordinates
+    elif calibrated_coordinates:
+        if isinstance(calibration_file_path, bool) and calibration_file_path:
+            # Legacy support for boolean flag
+            logger.log_info(f"Applying calibration offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm")
+            print(f"\033[1;36m[CALIBRATION] Applying workspace center offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm\033[0m")
+        elif isinstance(calibration_file_path, str):
+            # This means we're using a specific calibration file
+            logger.log_info(f"Using calibration file: {calibration_file_path}")
+            logger.log_info(f"Applying calibration offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm")
+            print(f"\033[1;36m[CALIBRATION] Using file: {calibration_file_path}\033[0m")
+            print(f"\033[1;36m[CALIBRATION] Applying workspace center offsets: X={calibrated_coordinates['x']}cm, Y={calibrated_coordinates['y']}cm\033[0m")
+    
     pose_dict = {}
     for pose_name, pose_values in data['Poses'].items():
-        validate_pose_values(pose_values)
-        check_radius_constraint(pose_name, pose_values)
-        pose_values = convert_pose_to_meters(pose_values)
-        # validate_pose_values(pose_values)
-        pose_dict[pose_name] = PortPoseCfg(pose=PoseConfig.from_dict(pose_values))
+        # Create a copy of the pose values to avoid modifying the original
+        adjusted_pose = copy.deepcopy(pose_values)
+        
+        # Apply calibration offsets if enabled and calibrated_coordinates is not None
+        if calibrated_coordinates is not None:
+            # Add the calibrated x and y values to the pose coordinates
+            adjusted_pose['x'] += calibrated_coordinates['x']
+            adjusted_pose['y'] += calibrated_coordinates['y']
+            logger.log_info(f"Adjusted pose '{pose_name}': Original X={pose_values['x']}cm, Y={pose_values['y']}cm ->"  
+                           f"Adjusted X={adjusted_pose['x']}cm, Y={adjusted_pose['y']}cm")
+        else:
+            # For None or False, we use the original coordinates without any modification
+            logger.log_info(f"Using original pose '{pose_name}' without modification: X={adjusted_pose['x']}cm, Y={adjusted_pose['y']}cm")
+        
+        validate_pose_values(adjusted_pose)
+        check_radius_constraint(pose_name, adjusted_pose)
+        adjusted_pose = convert_pose_to_meters(adjusted_pose)
+        # validate_pose_values(adjusted_pose)
+        pose_dict[pose_name] = PortPoseCfg(pose=PoseConfig.from_dict(adjusted_pose))
 
     if 'targets' not in data:
         raise KeyError("The key 'targets' is missing from the YAML file.")

@@ -110,7 +110,7 @@ def main():
     logger.log_info("--------------------------------")
     
     # Connect to the service
-    transport_service_client = TransportServiceClient("test_service")
+    transport_service_client = TransportServiceClient("remote_calibration")
     transport_service_client.connect_with_retries()
     transport_service_client.loop()
     
@@ -217,9 +217,9 @@ def main():
                     calibration_data = json.load(f)
                     
                 # Round the X, Y, Z values to integers
-                calibration_data['x'] = round(float(calibration_data['x']))
-                calibration_data['y'] = round(float(calibration_data['y']))
-                calibration_data['z'] = round(float(calibration_data['z']))
+                calibration_data['x'] = float(calibration_data['x'])
+                calibration_data['y'] = float(calibration_data['y'])
+                calibration_data['z'] = float(calibration_data['z'])
                 
                 logger.log_info(f"Calibration data read from file:")
                 logger.log_info(f"  X: {calibration_data['x']} cm (rounded)")
@@ -258,9 +258,9 @@ def main():
                 calibration_data = response_data["calibration_data"]
                 
                 # Round the X, Y, Z values to integers
-                calibration_data['x'] = round(float(calibration_data['x']))
-                calibration_data['y'] = round(float(calibration_data['y']))
-                calibration_data['z'] = round(float(calibration_data['z']))
+                calibration_data['x'] = float(calibration_data['x'])
+                calibration_data['y'] = float(calibration_data['y'])
+                calibration_data['z'] = float(calibration_data['z'])
                 
                 logger.log_info(f"Calibration data received:")
                 logger.log_info(f"  X: {calibration_data['x']} cm (rounded)")
